@@ -74,7 +74,11 @@
       "marketValue": 38991.12,
       "dayChangePercent": 2.44,
       "allocation": 21.2,
-      "aiSignal": "Hold"
+      "aiSignal": "Hold",
+      "lastAction": "Held",
+      "actionTime": "11:56 AM",
+      "actionPrice": 928.36,
+      "aiThought": "Trend remains positive, but the position is already near its allocation cap, so the AI kept exposure unchanged."
     },
     {
       "symbol": "MSFT",
@@ -84,7 +88,11 @@
       "marketValue": 29932.18,
       "dayChangePercent": 0.86,
       "allocation": 16.2,
-      "aiSignal": "Buy"
+      "aiSignal": "Buy",
+      "lastAction": "Bought",
+      "actionTime": "9:38 AM",
+      "actionPrice": 418.9,
+      "aiThought": "The AI added after earnings momentum stayed intact and downside volatility remained below the model limit."
     },
     {
       "symbol": "TSLA",
@@ -94,7 +102,11 @@
       "marketValue": 16724.48,
       "dayChangePercent": -1.18,
       "allocation": 9.1,
-      "aiSignal": "Trim"
+      "aiSignal": "Trim",
+      "lastAction": "Trimmed",
+      "actionTime": "10:18 AM",
+      "actionPrice": 179.66,
+      "aiThought": "The AI reduced exposure after volatility crossed the risk threshold and price action weakened against the broader portfolio."
     },
     {
       "symbol": "SPY",
@@ -104,7 +116,11 @@
       "marketValue": 42515.92,
       "dayChangePercent": 0.34,
       "allocation": 23.1,
-      "aiSignal": "Hold"
+      "aiSignal": "Hold",
+      "lastAction": "Held",
+      "actionTime": "10:45 AM",
+      "actionPrice": 512.24,
+      "aiThought": "SPY is stabilizing the portfolio beta, so the AI held this core allocation while individual names moved more aggressively."
     },
     {
       "symbol": "COIN",
@@ -114,7 +130,11 @@
       "marketValue": 13330.24,
       "dayChangePercent": 3.72,
       "allocation": 7.2,
-      "aiSignal": "Buy"
+      "aiSignal": "Buy",
+      "lastAction": "Bought",
+      "actionTime": "9:42 AM",
+      "actionPrice": 232.18,
+      "aiThought": "Momentum confirmed a breakout with rising volume, and the AI saw enough upside to add without exceeding the crypto-risk band."
     }
   ],
   "trades": [

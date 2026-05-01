@@ -22,3 +22,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+/Users/diego/Documents/AgenticTrade/src/cdk/lib/alpaca-secrets-stack.ts

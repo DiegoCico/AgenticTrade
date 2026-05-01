@@ -10,7 +10,6 @@ module.exports = {
     '!src/bin.ts',
   ],
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
-  setupFilesAfterEnv: ['<rootDir>/__tests__/jest.setup.ts'],
   testMatch: [
     '**/__tests__/**/*.test.ts',
   ],

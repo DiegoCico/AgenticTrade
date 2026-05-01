@@ -16,6 +16,10 @@ export type Position = {
   dayChangePercent: number;
   allocation: number;
   aiSignal: string;
+  lastAction: "Bought" | "Sold" | "Trimmed" | "Held";
+  actionTime: string;
+  actionPrice: number;
+  aiThought: string;
 };
 
 export type TradeDecision = {

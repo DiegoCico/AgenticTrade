@@ -9,7 +9,7 @@ import { WebStack } from "../lib/web-stack";
 import { DynamoStack } from "../lib/dynamo-stack";
 import { CognitoStack } from "../lib/cognito-stack";
 import { SesStack } from "../lib/ses-stack";
-import { PlaidSecretsStack } from "../lib/plaid-secrets-stack";
+import { AlpacaSecretsStack } from "../lib/alpaca-secrets-stack";
 import { DnsStack } from "../lib/dns-stack";
 
 const app = new cdk.App();
@@ -53,8 +53,8 @@ const cognito = new CognitoStack(app, `AgentictradeCognito-${cfg.name}`, {
   ddbTable: dynamo.table,
 });
 
-// ---------------- PLAID SECRETS ----------------
-const plaidSecrets = new PlaidSecretsStack(app, `AgentictradePlaidSecrets-${cfg.name}`, {
+// ---------------- ALPACA SECRETS ----------------
+const alpacaSecrets = new AlpacaSecretsStack(app, `AgentictradeAlpacaSecrets-${cfg.name}`, {
   env: { account, region },
   stage: cfg.name,
   serviceName: "agentictrade-api",
@@ -101,7 +101,7 @@ const api = new ApiStack(app, `AgentictradeApi-${cfg.name}`, {
   userPool: cognito.userPool,
   userPoolClient: cognito.userPoolClient,
   sesEmail: SES_FROM_EMAIL,
-  plaidSecret: plaidSecrets.plaidSecret,
+  alpacaSecret: alpacaSecrets.alpacaSecret,
 });
 
 // ---------------- WEB STACK ----------------
@@ -141,7 +141,7 @@ const ses = new SesStack(app, `AgentictradeSes-${cfg.name}`, {
 
 // ---------------- TAGGING ----------------
 if (cfg.tags) {
-  [dynamo, api, cognito, ses, web, plaidSecrets, dns].forEach((stack) => {
+  [dynamo, api, cognito, ses, web, alpacaSecrets, dns].forEach((stack) => {
     Object.entries(cfg.tags!).forEach(([k, v]) => {
       cdk.Tags.of(stack).add(k, v);
     });

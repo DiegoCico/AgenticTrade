@@ -52,3 +52,5 @@ src/cdk/cdk.out
 src/cdk/cdk.out/
 src/frontend/coverage/index.html
 node_modules
+
+src/cdk/lib/alpaca-secrets-stack.ts

@@ -4,6 +4,7 @@ import portfolioData from "./data/portfolio.json";
 import { PortfolioDashboard } from "./pages/PortfolioDashboard";
 import { TradePlans } from "./components/dashboard/TradePlans";
 import { RecentDecisions } from "./components/dashboard/RecentDecisions";
+import { CurrentPositions } from "./components/dashboard/CurrentPositions";
 import type { PortfolioData, Theme } from "./types/portfolio";
 import "./App.css";
 
@@ -23,6 +24,11 @@ export default function App() {
         onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
       />
       {activeTab === "portfolio" && <PortfolioDashboard data={data} />}
+      {activeTab === "positions" && (
+        <section className="catalog-page">
+          <CurrentPositions positions={data.positions} />
+        </section>
+      )}
       {activeTab === "plans" && (
         <section className="catalog-page">
           <TradePlans plans={data.plans} />

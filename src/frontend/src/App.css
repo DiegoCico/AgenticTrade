@@ -171,7 +171,8 @@ button {
 .positions-panel,
 .watchlist-panel,
 .trades-panel,
-.plans-panel {
+.plans-panel,
+.current-positions-panel {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -266,6 +267,7 @@ h2 {
 .top-tabs button:hover,
 .icon-button:hover,
 .position-row:hover,
+.current-position-row:hover,
 .watch-row:hover,
 .plan-card:hover {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
@@ -275,7 +277,8 @@ h2 {
 .positions-panel,
 .watchlist-panel,
 .trades-panel,
-.plans-panel {
+.plans-panel,
+.current-positions-panel {
   padding: 20px;
 }
 
@@ -338,6 +341,132 @@ h2 {
   grid-template-columns: 1.4fr 1fr 1fr 0.8fr;
   min-height: 76px;
   padding: 14px 16px;
+}
+
+.current-positions-list {
+  display: grid;
+  gap: 10px;
+}
+
+.current-position-row {
+  align-items: center;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1.35fr 0.6fr 1fr 0.8fr 1fr auto;
+  min-height: 82px;
+  padding: 14px 16px;
+}
+
+.current-position-row > div {
+  min-width: 0;
+}
+
+.current-position-row strong,
+.current-position-row span,
+.current-position-row small {
+  display: block;
+}
+
+.current-position-row span,
+.current-position-row small {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.current-position-main strong {
+  font-size: 1.05rem;
+}
+
+.action-cell {
+  display: grid;
+  gap: 6px;
+}
+
+.action-pill {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 700;
+  justify-self: start;
+  padding: 6px 10px;
+}
+
+.action-pill.buy {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.action-pill.sell {
+  background: rgba(255, 77, 79, 0.14);
+  color: var(--negative);
+}
+
+.action-pill.hold {
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  color: var(--text);
+}
+
+.thought-cell {
+  position: relative;
+}
+
+.thought-button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.thought-button:hover,
+.thought-button:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
+.thought-tooltip {
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  opacity: 0;
+  padding: 12px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 42px;
+  transform: translateY(-4px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  width: min(280px, 72vw);
+  z-index: 10;
+}
+
+.thought-tooltip strong {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.thought-tooltip p {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.thought-cell:hover .thought-tooltip,
+.thought-button:focus-visible + .thought-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .position-row strong,
@@ -575,6 +704,14 @@ h2 {
   .plans-grid {
     grid-template-columns: 1fr;
   }
+
+  .current-position-row {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .thought-cell {
+    justify-self: end;
+  }
 }
 
 @media (max-width: 640px) {
@@ -587,12 +724,23 @@ h2 {
   .positions-panel,
   .watchlist-panel,
   .trades-panel,
-  .plans-panel {
+  .plans-panel,
+  .current-positions-panel {
     padding: 16px;
   }
 
   .position-row {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .current-position-row {
+    align-items: start;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .current-position-main,
+  .action-cell {
+    grid-column: 1 / -1;
   }
 
   .chart-panel {

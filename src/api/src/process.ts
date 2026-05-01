@@ -28,6 +28,13 @@ const envSchema = z.object({
   PLAID_WEBHOOK_URL: z.string().optional(),
   PLAID_REDIRECT_URI: z.string().optional(),
 
+  // Alpaca Trading
+  ALPACA_API_KEY: z.string().optional(),
+  ALPACA_SECRET_KEY: z.string().optional(),
+  ALPACA_BASE_URL: z.string().default('https://paper-api.alpaca.markets/v2'),
+  ALPACA_DATA_URL: z.string().default('https://data.alpaca.markets'),
+  ALPACA_PAPER: z.string().default('true'),
+
   // Email
   SES_FROM_ADDRESS: z.string().default('cicotosted@gmail.com'),
   SES_CONFIG_SET: z.string().optional(),
@@ -46,6 +53,7 @@ const envSchema = z.object({
 
   // AWS Secrets Manager
   PLAID_SECRET_ARN: z.string().optional(),
+  ALPACA_SECRET_ARN: z.string().optional(),
 });
 
 // Cache for secrets to avoid repeated AWS calls
@@ -76,6 +84,37 @@ async function loadPlaidSecretsFromAWS(secretArn: string): Promise<{
     return secrets;
   } catch (error) {
     console.error(`[process.ts] ❌ Failed to load Plaid secrets from AWS:`, error);
+    throw error;
+  }
+}
+
+async function loadAlpacaSecretsFromAWS(secretArn: string): Promise<{
+  ALPACA_API_KEY: string;
+  ALPACA_SECRET_KEY: string;
+  ALPACA_BASE_URL?: string;
+  ALPACA_DATA_URL?: string;
+  ALPACA_PAPER?: string;
+}> {
+  if (secretsCache[secretArn]) {
+    return secretsCache[secretArn];
+  }
+
+  try {
+    const client = new SecretsManagerClient({ region: process.env.AWS_REGION || 'us-east-1' });
+    const command = new GetSecretValueCommand({ SecretId: secretArn });
+    const response = await client.send(command);
+
+    if (!response.SecretString) {
+      throw new Error('Secret value is empty');
+    }
+
+    const secrets = JSON.parse(response.SecretString);
+    secretsCache[secretArn] = secrets;
+
+    console.log(`[process.ts] ✅ Loaded Alpaca secrets from AWS Secrets Manager`);
+    return secrets;
+  } catch (error) {
+    console.error(`[process.ts] ❌ Failed to load Alpaca secrets from AWS:`, error);
     throw error;
   }
 }
@@ -119,6 +158,25 @@ export async function loadConfig() {
   const PLAID_WEBHOOK_URL = env.PLAID_WEBHOOK_URL;
   const PLAID_REDIRECT_URI = env.PLAID_REDIRECT_URI;
 
+  let ALPACA_API_KEY = env.ALPACA_API_KEY ?? '';
+  let ALPACA_SECRET_KEY = env.ALPACA_SECRET_KEY ?? '';
+  let ALPACA_BASE_URL = env.ALPACA_BASE_URL;
+  let ALPACA_DATA_URL = env.ALPACA_DATA_URL;
+  let ALPACA_PAPER = env.ALPACA_PAPER;
+
+  if (env.ALPACA_SECRET_ARN && process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    try {
+      const secrets = await loadAlpacaSecretsFromAWS(env.ALPACA_SECRET_ARN);
+      ALPACA_API_KEY = secrets.ALPACA_API_KEY || ALPACA_API_KEY;
+      ALPACA_SECRET_KEY = secrets.ALPACA_SECRET_KEY || ALPACA_SECRET_KEY;
+      ALPACA_BASE_URL = secrets.ALPACA_BASE_URL || ALPACA_BASE_URL;
+      ALPACA_DATA_URL = secrets.ALPACA_DATA_URL || ALPACA_DATA_URL;
+      ALPACA_PAPER = secrets.ALPACA_PAPER || ALPACA_PAPER;
+    } catch (error) {
+      console.warn(`[process.ts] ⚠️  Failed to load Alpaca secrets from AWS, using environment variables`);
+    }
+  }
+
   // Demo mode
   const DEMO_MODE = env.DEMO_MODE === 'true' || env.NODE_ENV === 'development';
 
@@ -140,6 +198,13 @@ export async function loadConfig() {
     PLAID_ENV,
     PLAID_WEBHOOK_URL,
     PLAID_REDIRECT_URI,
+
+    // Alpaca
+    ALPACA_API_KEY,
+    ALPACA_SECRET_KEY,
+    ALPACA_BASE_URL,
+    ALPACA_DATA_URL,
+    ALPACA_PAPER: ALPACA_PAPER === 'true',
 
     // Email
     SES_FROM: env.SES_FROM_ADDRESS,
@@ -167,6 +232,10 @@ export async function loadConfig() {
     warnings.push('⚠️  Cognito credentials not configured. Authentication will not work.');
   }
 
+  if (!config.ALPACA_API_KEY || !config.ALPACA_SECRET_KEY) {
+    warnings.push('⚠️  Alpaca credentials not configured. Trading execution will not work.');
+  }
+
   console.log(
     [
       '=============================================================',
@@ -176,6 +245,7 @@ export async function loadConfig() {
       `🪣 Bucket: ${config.BUCKET_NAME}`,
       `🔐 Cognito Pool: ${config.COGNITO_USER_POOL_ID || 'none'}`,
       `🏦 Plaid Env: ${config.PLAID_ENV} ${config.PLAID_CLIENT_ID ? '(configured)' : '(not configured)'}`,
+      `📈 Alpaca: ${config.ALPACA_API_KEY ? 'configured' : 'not configured'} (${config.ALPACA_PAPER ? 'paper' : 'live'})`,
       `📧 SES From: ${config.SES_FROM}`,
       `🌐 Web URL: ${config.WEB_URL}`,
       `🚀 Port: ${config.PORT}`,
@@ -227,6 +297,12 @@ export const config = (() => {
     PLAID_ENV: env.PLAID_ENV ?? 'sandbox',
     PLAID_WEBHOOK_URL: env.PLAID_WEBHOOK_URL,
     PLAID_REDIRECT_URI: env.PLAID_REDIRECT_URI,
+    ALPACA_API_KEY: env.ALPACA_API_KEY ?? '',
+    ALPACA_SECRET_KEY: env.ALPACA_SECRET_KEY ?? '',
+    ALPACA_BASE_URL: env.ALPACA_BASE_URL,
+    ALPACA_DATA_URL: env.ALPACA_DATA_URL,
+    ALPACA_PAPER: env.ALPACA_PAPER === 'true',
+    ALPACA_SECRET_ARN: env.ALPACA_SECRET_ARN,
     SES_FROM: env.SES_FROM_ADDRESS,
     SES_CONFIG_SET: env.SES_CONFIG_SET ?? '',
     ALLOWED_ORIGINS,

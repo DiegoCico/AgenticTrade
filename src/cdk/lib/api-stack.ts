@@ -32,7 +32,7 @@ export interface ApiStackProps extends cdk.StackProps {
   userPoolClient?: cognito.UserPoolClient;
   serviceName?: string;
   sesEmail: string;
-  plaidSecret: secretsmanager.Secret;
+  alpacaSecret: secretsmanager.Secret;
 }
 
 export class ApiStack extends cdk.Stack {
@@ -45,8 +45,7 @@ export class ApiStack extends cdk.Stack {
     const stage = props.stage;
     const serviceName = props.serviceName ?? "agentictrade-api";
 
-    // Use the external Plaid secret passed from app.ts
-    const plaidSecret = props.plaidSecret;
+    const alpacaSecret = props.alpacaSecret;
 
     // ===== Lambda (tRPC Handler) =====
     this.apiFn = new NodejsFunction(this, "TrpcLambda", {
@@ -75,9 +74,7 @@ export class ApiStack extends cdk.Stack {
         DYNAMODB_TABLE_NAME: props.ddbTable.tableName,
         COGNITO_USER_POOL_ID: props.userPool?.userPoolId || '',
         COGNITO_CLIENT_ID: props.userPoolClient?.userPoolClientId || '',
-        
-        // Plaid Secrets Manager ARN
-        PLAID_SECRET_ARN: plaidSecret.secretArn,
+        ALPACA_SECRET_ARN: alpacaSecret.secretArn,
 
         SES_FROM_EMAIL: props.sesEmail,
       },
@@ -90,7 +87,7 @@ export class ApiStack extends cdk.Stack {
     props.ddbTable.grantReadWriteData(this.apiFn);
 
     // ===== Secrets Manager Permissions =====
-    plaidSecret.grantRead(this.apiFn);
+    alpacaSecret.grantRead(this.apiFn);
 
     // ===== API Gateway (HTTP API v2) =====
     this.httpApi = new apigwv2.HttpApi(this, "HttpApi", {

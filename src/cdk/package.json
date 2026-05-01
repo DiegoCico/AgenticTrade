@@ -20,7 +20,7 @@
     "cdk:destroy:dev": "npx cdk destroy --force -c stage=dev",
     "cdk:destroy:beta": "npx cdk destroy --force -c stage=beta",
     "cdk:destroy:prod": "npx cdk destroy --force -c stage=prod",
-    "setup-plaid-secrets": "ts-node scripts/setup-plaid-secrets.ts"
+    "setup-alpaca-secrets": "ts-node scripts/setup-alpaca-secrets.ts"
   },
   "dependencies": {
     "@aws-cdk/aws-cognito-identitypool-alpha": "^2.114.1-alpha.0",

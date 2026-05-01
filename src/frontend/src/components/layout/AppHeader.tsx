@@ -11,6 +11,7 @@ type AppHeaderProps = {
 
 const tabs = [
   { id: "portfolio", label: "Portfolio" },
+  { id: "positions", label: "Current positions" },
   { id: "plans", label: "Trade plans" },
   { id: "decisions", label: "Decisions" },
 ];
