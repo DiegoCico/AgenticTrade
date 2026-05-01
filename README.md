@@ -1,376 +1,182 @@
-# Agentictrade - Personal Finance Management Platform
+# AgenticTrade
 
-A comprehensive personal finance management platform built with TypeScript, React, AWS CDK, and DynamoDB.
+AgenticTrade is an AI-assisted paper trading dashboard. The frontend shows portfolio performance, current positions, AI trade decisions, and planned buy/sell triggers. The backend exposes a tRPC API with a controlled trading pipeline that evaluates market snapshots, calculates signals, asks an AI decision layer for actions, validates those actions through risk rules, and records the resulting plans or trades.
 
-## 🏗️ Architecture Overview
+The current implementation is built for paper trading and demo data first. Alpaca credentials are managed through AWS Secrets Manager for deployed environments.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         AWS Cloud                                 │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                   │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐  │
-│  │  CloudFront │◄───│      S3     │    │    DynamoDB        │  │
-│  │   (CDN)     │    │  (Frontend) │    │  (User Data, Txs)  │  │
-│  └──────┬──────┘    └──────┬──────┘    └──────────┬──────────┘  │
-│         │                   │                          │              │
-│         └──────────────────┼──────────────────────────┘              │
-│                            ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │                     API Gateway                               │  │
-│  │              (TRPC + Lambda Functions)                       │  │
-│  └─────────────────────────┬───────────────────────────────────┘  │
-│                            ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │                     Cognito User Pool                         │  │
-│  │              (Authentication & Authorization)                  │  │
-│  └─────────────────────────────────────────────────────────────┘  │
-│                                                                   │
-└─────────────────────────────────────────────────────────────────┘
-```
+## Project Structure
 
-## 📁 Project Structure
-
-```
-agentictrade/
-├── src/
-│   ├── api/           # Backend API (TRPC + Lambda)
-│   ├── cdk/           # AWS Infrastructure as Code
-│   └── frontend/       # React Frontend Application
-├── .github/           # GitHub Actions CI/CD
-└── README.md          # This file
-```
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js 18+ 
-- npm or yarn
-- AWS CLI configured (for CDK deployments)
-- Docker (optional, for local testing)
-
-### Installation
-
-```bash
-# Install root dependencies
-npm install
-
-# Install API dependencies
-cd src/api && npm install
-
-# Install CDK dependencies
-cd ../cdk && npm install
-
-# Install Frontend dependencies
-cd ../frontend && npm install
-```
-
-### Development
-
-```bash
-# Start frontend development server
-cd src/frontend && npm run dev
-
-# Run API tests
-cd src/api && npm test
-
-# Deploy to AWS (requires AWS credentials)
-cd ../cdk && npm run deploy
-```
-
-## 📦 Key Features
-
-### 1. Dashboard
-- Monthly spending overview with category breakdown
-- Cashflow analysis (income vs expenses)
-- Net worth tracking
-- Recent transactions list
-
-### 2. Transactions
-- View all transactions with filtering
-- **Calendar View** - Visual calendar showing daily spending
-- **Click & Drag** - Select date ranges to see category breakdown
-- Automatic category assignment
-- Manual category editing
-- Plaid integration for bank sync
-
-### 3. Categories
-- Custom user-defined categories
-- Category colors and icons
-- Transaction count and totals
-- Category analytics
-- **Toggle ignored categories** - Show/hide ignored transactions
-
-### 4. Budgets
-- Monthly budget planning
-- Category-specific budgets
-- Spending progress tracking
-- **Active/Completed tabs** - Separate current and past months
-- **Year grouping** - View budgets organized by year
-
-### 5. Investments
-- Portfolio tracking
-- Investment performance metrics
-- Historical data visualization
-
-### 6. Planner
-- Savings goals management
-- Milestone tracking
-- Expense planning
-- **Active/Completed tabs** - Separate current and past goals
-
-### 7. Theme Settings
-- Dark/Light mode (persisted to localStorage)
-- Customizable accent color (persisted)
-- Consistent theme across all pages
-
-## 🔐 Authentication
-
-Agentictrade uses **AWS Cognito** for authentication:
-
-- Sign up / Sign in flows
-- Email verification
-- Password reset
-- Session management
-- Protected routes
-
-## 🗄️ Database Schema
-
-### DynamoDB Tables
-
-#### Users Table
-```
-PK: USER#{userId}
-SK: METADATA | PROFILE | SETTINGS
-
-Attributes:
-- userId, email, firstName, lastName
-- createdAt, updatedAt
-- preferences (JSON)
-```
-
-#### Transactions Table
-```
-PK: USER#{userId}
-SK: TRANSACTION#{transactionId} | TRANSACTION#{date}#
-
-Attributes:
-- transactionId, accountId, amount, currency
-- merchantName, name, date
-- category (assigned category ID)
-- pending, type
-```
-
-#### Categories Table
-```
-PK: USER#{userId}
-SK: CATEGORY#{categoryId}
-
-Attributes:
-- categoryId, name, color, description
-- transactionCount, totalAmount, avgAmount
-- isDefault, createdAt
-```
-
-#### Budgets Table
-```
-PK: USER#{userId}
-SK: BUDGET#{budgetId}
-
-Attributes:
-- budgetId, name, budgetType (category/total)
-- categoryId, amount, spent, remaining
-- month, year, period (monthly/yearly)
-- isAutoGenerated, createdAt, updatedAt
-```
-
-#### Plans Table
-```
-PK: USER#{userId}
-SK: PLAN#{planId}
-
-Attributes:
-- planId, title, description, planType
-- targetAmount, currentAmount, targetDate
-- monthlyIncome, monthlySavingsGoal
-- milestones (array), expenses (array)
-```
-
-#### Investments Table
-```
-PK: USER#{userId}
-SK: INVESTMENT#{investmentId}
-
-Attributes:
-- investmentId, symbol, name, type
-- shares, averageCost, currentPrice
-- purchaseDate, accountType
-```
-
-## 🛠️ Technology Stack
-
-### Frontend
-- **React 18** - UI framework
-- **TypeScript** - Type safety
-- **Vite** - Build tool
-- **Tailwind CSS** - Styling
-- **TRPC** - Type-safe API calls
-- **React Router** - Navigation
-- **Lucide React** - Icons
-
-### Backend
-- **Node.js** - Runtime
-- **TypeScript** - Language
-- **TRPC** - API framework
-- **DynamoDB** - Database
-- **AWS Lambda** - Compute
-- **AWS Cognito** - Authentication
-- **Jest** - Testing
-
-### Infrastructure
-- **AWS CDK** - Infrastructure as Code
-- **AWS Lambda** - Serverless functions
-- **API Gateway** - REST endpoints
-- **DynamoDB** - NoSQL database
-- **S3** - Static hosting
-- **CloudFront** - CDN
-- **Cognito** - Auth service
-
-## 📝 API Documentation
-
-### TRPC Routers
-
-#### authRouter
-- `getCurrentUser` - Get authenticated user
-- `signUp` - Create new account
-- `signIn` - User login
-- `signOut` - User logout
-- `confirmSignUp` - Verify email
-- `resendConfirmationCode` - Resend verification
-
-#### transactionsRouter
-- `getTransactions` - List user transactions
-- `createTransaction` - Add transaction
-- `updateTransaction` - Modify transaction
-- `deleteTransaction` - Remove transaction
-- `searchTransactions` - Search by merchant/amount
-
-#### categoriesRouter
-- `getCategories` - List user categories
-- `createCategory` - Add new category
-- `updateCategory` - Modify category
-- `deleteCategory` - Remove category
-- `assignCategory` - Assign category to transaction
-
-#### budgetsRouter
-- `getBudgets` - List user budgets
-- `createBudget` - Create new budget
-- `updateBudget` - Modify budget
-- `deleteBudget` - Remove budget
-- `refreshBudgetSpending` - Recalculate spending
-
-#### dashboardRouter
-- `getDashboard` - Dashboard data
-- `getCashflow` - Income/expense analysis
-- `getNetWorth` - Net worth over time
-
-#### investmentsRouter
-- `getInvestments` - List investments
-- `createInvestment` - Add investment
-- `updateInvestment` - Modify investment
-- `deleteInvestment` - Remove investment
-
-#### plannerRouter
-- `getPlans` - List savings plans
-- `createPlan` - Create savings goal
-- `updatePlan` - Modify plan
-- `deletePlan` - Remove plan
-- `addMilestone` - Add milestone
-- `addExpense` - Add planned expense
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run with coverage
-npm test -- --coverage
-
-# Run specific test file
-npm test -- categories.test.ts
-```
-
-## 🚀 Deployment
-
-### Prerequisites
-1. AWS account with CDK bootstrapped
-2. Configured AWS credentials
-3. Domain name (optional, for custom domain)
-
-### Deployment Steps
-
-```bash
-# 1. Bootstrap CDK (first time only)
-cd src/cdk
-npm run bootstrap
-
-# 2. Deploy all stacks
-npm run deploy
-
-# 3. Deploy frontend
-cd ../frontend
-npm run build
-npm run deploy
-```
-
-## 📁 Key Files
-
-```
+```txt
 src/
-├── api/
-│   ├── src/
-│   │   ├── routers/         # TRPC routers
-│   │   │   ├── auth.ts
-│   │   │   ├── transactions.ts
-│   │   │   ├── categories.ts
-│   │   │   ├── budgets.ts
-│   │   │   └── ...
-│   │   ├── handler.ts        # Lambda handler
-│   │   └── process.ts       # Environment config
-│   └── __tests__/          # API tests
-│
-├── cdk/
-│   ├── lib/
-│   │   ├── api-stack.ts     # API Gateway + Lambda
-│   │   ├── cognito-stack.ts # Authentication
-│   │   ├── dynamo-stack.ts  # Database tables
-│   │   └── web-stack.ts     # S3 + CloudFront
-│   └── bin/
-│       └── app.ts           # CDK app entry
-│
-└── frontend/
-    ├── src/
-    │   ├── pages/           # Route components
-    │   │   ├── Dashboard.tsx
-    │   │   ├── Transactions.tsx
-    │   │   ├── Categories.tsx
-    │   │   └── ...
-    │   ├── components/     # Reusable components
-    │   ├── services/       # API client
-    │   └── App.tsx         # Root component
-    └── ...
+  api/       tRPC API, trading pipeline, local Express server, Lambda handler
+  frontend/  Vite + React portfolio dashboard
+  cdk/       AWS CDK infrastructure
 ```
 
-## 🤝 Contributing
+## Current App
 
-1. Create feature branch from `main`
-2. Make changes with tests
-3. Run `npm test` to verify
-4. Create pull request
-5. Review and merge
+Frontend tabs:
 
-## 📄 License
+- `Portfolio`: portfolio value, animated performance chart, AI status, positions, watchlist, recent AI decisions
+- `Current positions`: current holdings with latest bought/sold/trimmed/held action and hoverable AI reasoning
+- `Trade plans`: planned buy/sell triggers such as “buy AMD if it hits $158”
+- `Decisions`: recent AI decision log cards
 
-MIT License - see LICENSE file for details.
+Backend pipeline:
+
+```txt
+Market snapshot
+  -> Signal calculation
+  -> LLM/fallback market context
+  -> AI decision layer
+  -> Risk validator
+  -> Trade planner / executor
+  -> Decision log
+```
+
+Infrastructure:
+
+- API Gateway HTTP API
+- Lambda tRPC handler
+- DynamoDB table
+- S3 + CloudFront frontend hosting
+- Route53/DNS stack
+- Alpaca Secrets Manager stack
+- LLM Secrets Manager stack
+
+## Prerequisites
+
+- Node.js 18+
+- npm
+- AWS CLI configured for deployment
+- AWS CDK bootstrap completed for the target account/region
+- Alpaca paper trading key/secret for live backend integration work
+
+## Install
+
+From the repo root:
+
+```bash
+npm install
+```
+
+Each workspace can also be installed directly if needed:
+
+```bash
+cd src/frontend && npm install
+cd ../api && npm install
+cd ../cdk && npm install
+```
+
+## Development
+
+Run frontend and API together:
+
+```bash
+npm run dev
+```
+
+Run only the frontend:
+
+```bash
+npm run dev:frontend
+```
+
+Run only the API:
+
+```bash
+npm run dev:api
+```
+
+Default local URLs:
+
+- Frontend: `http://localhost:5173`
+- API: `http://localhost:3001`
+- tRPC endpoint: `http://localhost:3001/trpc`
+
+## Build And Test
+
+```bash
+npm run build
+npm run test
+```
+
+Workspace builds:
+
+```bash
+npm -w src/frontend run build
+npm -w src/api run build
+npm -w src/cdk run build
+```
+
+Note: the frontend build may warn about bundle size because Recharts and Framer Motion are included. That warning is non-blocking.
+
+## Alpaca Configuration
+
+Local API development reads Alpaca values from `src/api/.env`:
+
+```txt
+ALPACA_API_KEY=your_key
+ALPACA_SECRET_KEY=your_secret
+ALPACA_BASE_URL=https://paper-api.alpaca.markets/v2
+ALPACA_DATA_URL=https://data.alpaca.markets
+ALPACA_PAPER=true
+```
+
+LLM market-context configuration:
+
+```txt
+LLM_PROVIDER=openai-compatible
+LLM_API_KEY=your_key
+LLM_BASE_URL=https://api.openai.com/v1/chat/completions
+LLM_MODEL=your_model
+LLM_MARKET_CONTEXT_ENABLED=false
+```
+
+Deployed environments use the CDK-created Alpaca secret:
+
+```txt
+agentictrade-api/{stage}/alpaca
+```
+
+Expected secret JSON:
+
+```json
+{
+  "ALPACA_API_KEY": "your_key",
+  "ALPACA_SECRET_KEY": "your_secret",
+  "ALPACA_BASE_URL": "https://paper-api.alpaca.markets/v2",
+  "ALPACA_DATA_URL": "https://data.alpaca.markets",
+  "ALPACA_PAPER": "true"
+}
+```
+
+## Deployment
+
+Build the frontend first so the web stack has assets:
+
+```bash
+npm -w src/frontend run build
+```
+
+Deploy CDK stacks:
+
+```bash
+cd src/cdk
+npm run cdk:deploy:dev
+```
+
+Useful CDK commands:
+
+```bash
+npm run cdk:synth
+npm run cdk:diff
+npm run cdk:destroy:dev
+```
+
+## Docs
+
+- API details: `src/api/README.md`
+- Trading pipeline details: `src/api/TRADING_PIPELINE.md`
+- Frontend details: `src/frontend/README.md`
+- Infrastructure details: `src/cdk/README.md`

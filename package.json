@@ -47,7 +47,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.908.0",
     "@mui/icons-material": "^7.3.4",
-    "aws-jwt-verify": "^5.1.1",
     "framer-motion": "^12.34.0",
     "heic2any": "^0.0.4",
     "import-local": "^3.2.0",

@@ -15,12 +15,9 @@
     "sync-bank-data:dry-run": "tsx src/scripts/syncBankData.ts --dry-run"
   },
   "dependencies": {
-    "@aws-sdk/client-cognito-identity-provider": "^3.911.0",
     "@aws-sdk/client-lambda": "^3.932.0",
     "@aws-sdk/client-s3": "^3.911.0",
     "@aws-sdk/client-secrets-manager": "^3.952.0",
-    "@aws-sdk/client-ses": "^3.908.0",
-    "@aws-sdk/client-sesv2": "^3.911.0",
     "@aws-sdk/lib-dynamodb": "^3.921.0",
     "@aws-sdk/s3-request-presigner": "^3.911.0",
     "@aws-sdk/types": "^3.910.0",
@@ -28,11 +25,9 @@
     "@smithy/types": "^4.8.0",
     "@trpc/server": "^10.45.2",
     "@types/cors": "^2.8.19",
-    "aws-jwt-verify": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
-    "plaid": "^11.0.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

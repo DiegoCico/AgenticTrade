@@ -28,8 +28,7 @@
     "baseUrl": ".",
     "paths": {
       "lucide-react": ["../node_modules/lucide-react"],
-      "react-router-dom": ["../node_modules/react-router-dom"],
-      "react-plaid-link": ["../node_modules/react-plaid-link"]
+      "react-router-dom": ["../node_modules/react-router-dom"]
     }
   },
   "include": ["src"]

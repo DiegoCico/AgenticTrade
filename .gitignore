@@ -54,3 +54,4 @@ src/frontend/coverage/index.html
 node_modules
 
 src/cdk/lib/alpaca-secrets-stack.ts
+src/cdk/lib/llm-secrets-stack.ts

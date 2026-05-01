@@ -23,7 +23,6 @@
     "setup-alpaca-secrets": "ts-node scripts/setup-alpaca-secrets.ts"
   },
   "dependencies": {
-    "@aws-cdk/aws-cognito-identitypool-alpha": "^2.114.1-alpha.0",
     "source-map-support": "^0.5.21"
   },
   "devDependencies": {

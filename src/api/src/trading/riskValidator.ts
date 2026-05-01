@@ -27,6 +27,22 @@ export function validateDecision(decision: AiDecision, portfolio: PortfolioState
     reasons.push(`Position is already at or above max allocation of ${portfolio.maxPositionPercent}%.`);
   }
 
+  if ((decision.action === 'buy' || decision.action === 'plan_buy') && decision.stopLossPrice !== undefined && decision.stopLossPrice >= referencePrice) {
+    reasons.push('Stop loss for a buy must be below the entry or trigger price.');
+  }
+
+  if ((decision.action === 'buy' || decision.action === 'plan_buy') && decision.takeProfitPrice !== undefined && decision.takeProfitPrice <= referencePrice) {
+    reasons.push('Take profit for a buy must be above the entry or trigger price.');
+  }
+
+  if ((decision.action === 'sell' || decision.action === 'trim' || decision.action === 'plan_sell') && decision.stopLossPrice !== undefined && decision.stopLossPrice <= 0) {
+    reasons.push('Stop loss must be a positive price.');
+  }
+
+  if ((decision.action === 'sell' || decision.action === 'trim' || decision.action === 'plan_sell') && decision.takeProfitPrice !== undefined && decision.takeProfitPrice <= 0) {
+    reasons.push('Take profit must be a positive price.');
+  }
+
   if (decision.action === 'hold' || decision.action === 'watch') {
     return {
       approved: true,

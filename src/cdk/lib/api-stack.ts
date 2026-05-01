@@ -8,9 +8,9 @@ import { NodejsFunction, OutputFormat } from "aws-cdk-lib/aws-lambda-nodejs";
 
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as apigwIntegrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import * as scheduler from "aws-cdk-lib/aws-scheduler";
 
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
-import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 
@@ -28,16 +28,15 @@ export interface ApiStackProps extends cdk.StackProps {
     };
   };
   ddbTable: dynamodb.Table;
-  userPool?: cognito.UserPool;
-  userPoolClient?: cognito.UserPoolClient;
   serviceName?: string;
-  sesEmail: string;
   alpacaSecret: secretsmanager.Secret;
+  llmSecret: secretsmanager.Secret;
 }
 
 export class ApiStack extends cdk.Stack {
   public readonly httpApi: apigwv2.HttpApi;
   public readonly apiFn: lambda.Function;
+  public readonly tradingCronFn: lambda.Function;
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
@@ -46,6 +45,18 @@ export class ApiStack extends cdk.Stack {
     const serviceName = props.serviceName ?? "agentictrade-api";
 
     const alpacaSecret = props.alpacaSecret;
+    const llmSecret = props.llmSecret;
+    const lambdaEnvironment = {
+      NODE_OPTIONS: "--enable-source-maps",
+      NODE_ENV: stage.nodeEnv,
+      STAGE: stage.name,
+      SERVICE_NAME: serviceName,
+      TABLE_NAME: props.ddbTable.tableName,
+      APP_REGION: this.region,
+      DYNAMODB_TABLE_NAME: props.ddbTable.tableName,
+      ALPACA_SECRET_ARN: alpacaSecret.secretArn,
+      LLM_SECRET_ARN: llmSecret.secretArn,
+    };
 
     // ===== Lambda (tRPC Handler) =====
     this.apiFn = new NodejsFunction(this, "TrpcLambda", {
@@ -64,30 +75,70 @@ export class ApiStack extends cdk.Stack {
         externalModules: ["aws-sdk"],        // only dependency needed
       },
 
-      environment: {
-        NODE_OPTIONS: "--enable-source-maps",
-        NODE_ENV: stage.nodeEnv,
-        STAGE: stage.name,
-        SERVICE_NAME: serviceName,
-        TABLE_NAME: props.ddbTable.tableName,
-        APP_REGION: this.region,
-        DYNAMODB_TABLE_NAME: props.ddbTable.tableName,
-        COGNITO_USER_POOL_ID: props.userPool?.userPoolId || '',
-        COGNITO_CLIENT_ID: props.userPoolClient?.userPoolClientId || '',
-        ALPACA_SECRET_ARN: alpacaSecret.secretArn,
-
-        SES_FROM_EMAIL: props.sesEmail,
-      },
+      environment: lambdaEnvironment,
 
       // ===== 2-Week Log Retention =====
       logRetention: logs.RetentionDays.TWO_WEEKS,
     });
 
+    // ===== Lambda (Scheduled Trading Evaluation) =====
+    this.tradingCronFn = new NodejsFunction(this, "TradingCronLambda", {
+      functionName: `${serviceName}-${stage.name}-trading-cron`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.resolve(__dirname, "../../api/src/scheduled-trading.ts"),
+      handler: "handler",
+      memorySize: stage.lambda.memorySize,
+      timeout: stage.lambda.timeout,
+
+      bundling: {
+        target: "node20",
+        format: OutputFormat.CJS,
+        minify: true,
+        sourceMap: true,
+        externalModules: ["aws-sdk"],
+      },
+
+      environment: lambdaEnvironment,
+      logRetention: logs.RetentionDays.TWO_WEEKS,
+    });
+
     // ===== DDB Permissions =====
     props.ddbTable.grantReadWriteData(this.apiFn);
+    props.ddbTable.grantReadWriteData(this.tradingCronFn);
 
     // ===== Secrets Manager Permissions =====
     alpacaSecret.grantRead(this.apiFn);
+    llmSecret.grantRead(this.apiFn);
+    alpacaSecret.grantRead(this.tradingCronFn);
+    llmSecret.grantRead(this.tradingCronFn);
+
+    // ===== Schedule: Monday-Friday, 30 minutes after market open =====
+    const schedulerRole = new iam.Role(this, "TradingCronSchedulerRole", {
+      assumedBy: new iam.ServicePrincipal("scheduler.amazonaws.com"),
+    });
+
+    schedulerRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["lambda:InvokeFunction"],
+        resources: [this.tradingCronFn.functionArn],
+      })
+    );
+
+    new scheduler.CfnSchedule(this, "TradingCronSchedule", {
+      name: `${serviceName}-${stage.name}-trading-cron`,
+      description: "Runs the AgenticTrade AI evaluation Monday-Friday at 10:00 AM America/New_York.",
+      flexibleTimeWindow: { mode: "OFF" },
+      scheduleExpression: "cron(0 10 ? * MON-FRI *)",
+      scheduleExpressionTimezone: "America/New_York",
+      target: {
+        arn: this.tradingCronFn.functionArn,
+        roleArn: schedulerRole.roleArn,
+        input: JSON.stringify({
+          source: "agentictrade.scheduler",
+          job: "trading-evaluation",
+        }),
+      },
+    });
 
     // ===== API Gateway (HTTP API v2) =====
     this.httpApi = new apigwv2.HttpApi(this, "HttpApi", {
@@ -105,18 +156,6 @@ export class ApiStack extends cdk.Stack {
       "LambdaIntegration",
       this.apiFn
     );
-
-    // =====SES Permissions =====
-    this.apiFn.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: [
-          "ses:SendEmail",
-          "ses:SendRawEmail",
-        ],
-        resources: ["*"],
-      })
-    );
-
 
     // ===== Routes =====
 
@@ -157,6 +196,10 @@ export class ApiStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "FunctionName", {
       value: this.apiFn.functionName,
+    });
+
+    new cdk.CfnOutput(this, "TradingCronFunctionName", {
+      value: this.tradingCronFn.functionName,
     });
 
     new cdk.CfnOutput(this, "TableName", {

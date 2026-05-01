@@ -46,11 +46,26 @@ export type TradingSignal = {
   signal: 'bullish' | 'bearish' | 'neutral';
 };
 
+export type MarketContext = {
+  generatedAt: string;
+  provider: string;
+  model: string;
+  summary: string;
+  themes: string[];
+  perSymbol: Array<{
+    symbol: string;
+    view: 'constructive' | 'cautious' | 'neutral';
+    rationale: string;
+  }>;
+};
+
 export type AiDecision = {
   symbol: string;
   action: TradeAction;
   quantity: number;
   triggerPrice?: number;
+  stopLossPrice?: number;
+  takeProfitPrice?: number;
   confidence: number;
   reason: string;
   riskNotes: string;
@@ -68,6 +83,8 @@ export type TradePlan = {
   side: 'buy' | 'sell';
   quantity: number;
   triggerPrice: number;
+  stopLossPrice?: number;
+  takeProfitPrice?: number;
   confidence: number;
   status: 'planned' | 'blocked';
   reason: string;
@@ -81,6 +98,8 @@ export type ExecutedTrade = {
   action: TradeAction;
   quantity: number;
   price: number;
+  stopLossPrice?: number;
+  takeProfitPrice?: number;
   executedAt: string;
   reason: string;
 };
@@ -94,6 +113,7 @@ export type DecisionLogEntry = {
   input: {
     portfolio: PortfolioState;
     signals: TradingSignal[];
+    marketContext: MarketContext;
   };
   aiDecision: AiDecision;
   riskReview: RiskReview;
@@ -103,6 +123,7 @@ export type PipelineResult = {
   portfolio: PortfolioState;
   snapshot: MarketSnapshot;
   signals: TradingSignal[];
+  marketContext: MarketContext;
   decisions: DecisionLogEntry[];
   tradePlans: TradePlan[];
   executedTrades: ExecutedTrade[];

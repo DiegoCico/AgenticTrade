@@ -1,412 +1,146 @@
-# Agentictrade API
+# AgenticTrade API
 
-TypeScript-based backend API using TRPC, DynamoDB, and AWS Lambda.
+The API is a TypeScript tRPC backend that can run locally with Express or deploy as an AWS Lambda handler behind API Gateway. Its main responsibility right now is the AI trading pipeline.
 
-## 🏗️ Architecture
+## Runtime
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     API Gateway                              │
-│              (TRPC Router → Lambda Handler)                │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     Lambda Handler                          │
-│                   (src/handler.ts)                          │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-          ┌───────────────┼───────────────┐
-          ▼               ▼               ▼
-    ┌──────────┐   ┌──────────┐   ┌──────────┐
-    │ DynamoDB │   │ Cognito  │   │  S3      │
-    │ (Data)   │   │ (Auth)   │   │ (Files)  │
-    └──────────┘   └──────────┘   └──────────┘
-```
+- Local server: `src/server.ts`
+- Lambda handler: `src/handler.ts`
+- Scheduled trading Lambda: `src/scheduled-trading.ts`
+- tRPC router root: `src/routers/index.ts`
+- Config loader: `src/process.ts`
 
-## 📁 Directory Structure
+## Directory Structure
 
-```
+```txt
 src/api/
-├── __tests__/              # Jest test files
-│   ├── auth.test.ts        # Authentication tests
-│   ├── categories.test.ts  # Category tests
-│   ├── transactions.test.ts # Transaction tests
-│   ├── budgets.test.ts     # Budget tests
-│   ├── dashboard.test.ts   # Dashboard tests
-│   ├── investments.test.ts  # Investment tests
-│   ├── planner.test.ts     # Planner tests
-│   ├── routers.test.ts      # Router export tests
-│   ├── categories.integration.test.ts # Integration tests
-│   └── jest.setup.ts        # Jest configuration
-│
-├── src/
-│   ├── routers/            # TRPC route handlers
-│   │   ├── auth.ts        # Authentication endpoints
-│   │   ├── transactions.ts # Transaction management
-│   │   ├── categories.ts   # Category management
-│   │   ├── budgets.ts      # Budget management
-│   │   ├── dashboard.ts    # Dashboard data
-│   │   ├── investments.ts  # Investment tracking
-│   │   ├── planner.ts      # Savings planner
-│   │   ├── plaid.ts        # Bank sync (Plaid)
-│   │   ├── hello.ts        # Health check
-│   │   ├── trpc.ts         # TRPC initialization
-│   │   └── index.ts        # Router composition
-│   │
-│   ├── cognito/           # Cognito triggers
-│   │   ├── pre-signup.ts   # Pre-signup handler
-│   │   ├── post-confirmation.ts # Post-confirm handler
-│   │   └── cookies.ts      # Cookie utilities
-│   │
-│   ├── data/
-│   │   └── demoData.ts    # Demo/mock data
-│   │
-│   ├── handler.ts         # Lambda entry point
-│   ├── process.ts        # Environment config
-│   └── server.ts         # TRPC server setup
-│
-├── jest.config.js         # Jest configuration
-├── package.json          # Dependencies
-└── tsconfig.json         # TypeScript config
+  src/
+    routers/
+      aiTrading.ts       tRPC procedures for portfolio, decisions, plans, evaluation
+      index.ts           root app router
+      trpc.ts            tRPC initialization/context
+    trading/
+      aiDecisionEngine.ts mock AI decision layer
+      demoData.ts         demo portfolio and market candles
+      marketData.ts       market snapshot loader
+      marketContext.ts    LLM/fallback market-data context generation
+      pipeline.ts         orchestrates the full trading pipeline
+      riskValidator.ts    deterministic safety gate
+      signals.ts          market signal calculations
+      tradePlanner.ts     creates planned/executed trade outcomes
+      types.ts            pipeline types
+    handler.ts            Lambda entry
+    scheduled-trading.ts  EventBridge Scheduler entry for daily market evaluation
+    server.ts             local Express entry
+    process.ts            environment and Secrets Manager config
+  TRADING_PIPELINE.md     detailed pipeline explanation
 ```
 
-## 🚀 Getting Started
+## tRPC API
 
-### Installation
+The active router is `aiTrading`.
+
+Procedures:
+
+| Procedure | Type | Description |
+| --- | --- | --- |
+| `aiTrading.getState` | query | Returns portfolio, decision log, trade plans, and executed trades |
+| `aiTrading.getPortfolio` | query | Returns current portfolio state |
+| `aiTrading.getPositions` | query | Returns current positions |
+| `aiTrading.getTradePlans` | query | Returns planned/blocked trade plans |
+| `aiTrading.getDecisions` | query | Returns decision log entries |
+| `aiTrading.evaluate` | mutation | Runs the trading pipeline for requested symbols or all current holdings |
+
+Example `evaluate` input:
+
+```json
+{
+  "symbols": ["NVDA", "MSFT", "TSLA"]
+}
+```
+
+If `symbols` is omitted, the API evaluates all current holdings from the demo portfolio.
+
+## Trading Pipeline
+
+The pipeline is intentionally structured instead of prompting the AI with raw stocks.
+
+```txt
+getMarketSnapshot()
+  -> calculateSignals()
+  -> buildMarketContext()
+  -> requestAiDecisions()
+  -> validateDecision()
+  -> createTradeOutcome()
+  -> decisionLog
+```
+
+Current behavior:
+
+- Uses demo candles and demo portfolio data.
+- Adds an LLM-ready market-context pass before final decisions.
+- Uses a deterministic mock AI policy engine.
+- Includes stop-loss and take-profit prices when the AI decision calls for them.
+- Creates in-memory trade plans and executed trades.
+- Logs every recommendation with prompt version, model name, input snapshot, AI output, and risk review.
+
+Read `TRADING_PIPELINE.md` for the deeper design notes and the expected Alpaca integration path.
+
+## Scheduled Evaluation
+
+The CDK API stack deploys a separate scheduled Lambda that runs `runTradingPipeline()` automatically:
+
+```txt
+Monday-Friday at 10:00 AM America/New_York
+```
+
+That is 30 minutes after the regular U.S. market open. Manual evaluations through `aiTrading.evaluate` and scheduled evaluations use the same pipeline code.
+
+## Environment
+
+Create `src/api/.env` for local development.
+
+```txt
+NODE_ENV=development
+DEMO_MODE=true
+AWS_REGION=us-east-1
+DYNAMODB_TABLE_NAME=agentictrade-dev-data
+
+ALPACA_API_KEY=your_key
+ALPACA_SECRET_KEY=your_secret
+ALPACA_BASE_URL=https://paper-api.alpaca.markets/v2
+ALPACA_DATA_URL=https://data.alpaca.markets
+ALPACA_PAPER=true
+
+LLM_PROVIDER=openai-compatible
+LLM_API_KEY=your_llm_api_key
+LLM_BASE_URL=https://api.openai.com/v1/chat/completions
+LLM_MODEL=your_model
+LLM_MARKET_CONTEXT_ENABLED=false
+```
+
+For Lambda, CDK injects:
+
+```txt
+ALPACA_SECRET_ARN=...
+LLM_SECRET_ARN=...
+```
+
+`process.ts` loads Alpaca and LLM credentials from AWS Secrets Manager when running in Lambda and falls back to environment variables for local development.
+
+## Commands
 
 ```bash
 cd src/api
-npm install
-```
-
-### Development
-
-```bash
-# Run tests
-npm test
-
-# Run tests with coverage
-npm test -- --coverage
-
-# Run tests in watch mode
-npm test -- --watch
-```
-
-### Environment Variables
-
-```env
-# Required
-TABLE_NAME=agentictrade-users
-USER_POOL_ID=us-east-1_xxxxx
-CLIENT_ID=xxxxx
-REGION=us-east-1
-
-# Optional
-DEMO_MODE=true
-```
-
-## 🛡️ Security & Rate Limiting
-
-### Rate Limiting
-
-The API implements rate limiting to prevent abuse:
-
-| Endpoint | Limit | Window |
-|----------|-------|--------|
-| `signUp` | 5 requests | 15 minutes |
-| `signIn` | 10 requests | 15 minutes |
-| `confirmSignUp` | 10 requests | 15 minutes |
-| `resendConfirmationCode` | 3 requests | 1 hour |
-| `forgotPassword` | 3 requests | 1 hour |
-| `confirmForgotPassword` | 5 requests | 1 hour |
-
-### Security Tests
-
-The API includes security tests covering:
-- Input validation
-- Authentication bypass prevention
-- SQL/NoSQL injection prevention
-- Authorization checks
-- Rate limiting enforcement
-
-```bash
-npm test -- security.test.ts
-```
-
-## 📝 API Endpoints
-
-### Authentication (`authRouter`)
-
-| Procedure | Input | Output | Description |
-|-----------|-------|--------|-------------|
-| `getCurrentUser` | - | User object | Get authenticated user |
-| `signUp` | { email, password, name } | Auth result | Create account |
-| `signIn` | { email, password } | Auth result | User login |
-| `signOut` | - | { success } | User logout |
-| `confirmSignUp` | { email, code } | { success } | Verify email |
-| `resendConfirmation` | { email } | { success } | Resend code |
-
-### Transactions (`transactionsRouter`)
-
-| Procedure | Input | Output | Description |
-|-----------|-------|--------|-------------|
-| `getTransactions` | { days, limit, cursor, includeIgnored } | { transactions, nextCursor, hasMore, totalCount } | List transactions with pagination |
-| `createTransaction` | Transaction input | Transaction | Add transaction |
-| `updateTransaction` | { id, ...updates } | Transaction | Modify transaction |
-| `deleteTransaction` | { id } | { success } | Remove transaction |
-| `searchTransactions` | { query } | Transaction[] | Search transactions |
-
-**Pagination**: The `getTransactions` endpoint supports cursor-based pagination:
-- `limit` - Number of transactions per page (default: 50, max: 100)
-- `cursor` - Opaque cursor from previous response
-- Returns `nextCursor` and `hasMore` for client-side pagination
-
-**Filtering**:
-- `includeIgnored` - Include ignored transactions in results
-- `totalCount` - Total count of non-ignored transactions (first page only)
-
-### Categories (`categoriesRouter`)
-
-| Procedure | Input | Output | Description |
-|-----------|-------|--------|-------------|
-| `getCategories` | - | Category[] | List categories |
-| `createCategory` | { name, color, description } | Category | Add category |
-| `updateCategory` | { id, ...updates } | Category | Modify category |
-| `deleteCategory` | { id } | { success } | Remove category |
-| `assignCategory` | { transactionId, category } | { success } | Assign to transaction |
-| `autoCategorize` | - | { categorized } | Auto-assign categories |
-
-### Budgets (`budgetsRouter`)
-
-| Procedure | Input | Output | Description |
-|-----------|-------|--------|-------------|
-| `getBudgets` | - | Budget[] | List budgets |
-| `getBudget` | { id } | Budget | Get single budget |
-| `createBudget` | Budget input | Budget | Create budget |
-| `updateBudget` | { id, ...updates } | Budget | Modify budget |
-| `deleteBudget` | { id } | { success } | Remove budget |
-| `refreshBudgetSpending` | { id } | { spent, remaining } | Recalculate spending |
-| `autoGenerateBudgets` | - | { created } | Generate from categories |
-
-**Spent Calculation**: Budget spent amounts include both expenses AND refunds:
-- Negative transactions (expenses) add to spent
-- Positive transactions (refunds/credits) subtract from spent
-- Example: -$70 + -$90 + $70 refund = $90 spent (not $160)
-
-### Dashboard (`dashboardRouter`)
-
-| Procedure | Input | Output | Description |
-|-----------|-------|--------|-------------|
-| `getDashboard` | { month, year } | DashboardData | Dashboard overview |
-| `getCashflow` | { month, year } | CashflowData | Income vs expenses |
-| `getNetWorth` | - | NetWorthData | Net worth history |
-
-### Investments (`investmentsRouter`)
-
-| Procedure | Input | Output | Description |
-|-----------|-------|--------|-------------|
-| `getInvestments` | - | Investment[] | List investments |
-| `createInvestment` | Investment input | Investment | Add investment |
-| `updateInvestment` | { id, ...updates } | Investment | Modify investment |
-| `deleteInvestment` | { id } | { success } | Remove investment |
-
-### Planner (`plannerRouter`)
-
-| Procedure | Input | Output | Description |
-|-----------|-------|--------|-------------|
-| `getPlans` | - | Plan[] | List savings plans |
-| `createPlan` | Plan input | Plan | Create savings goal |
-| `updatePlan` | { id, ...updates } | Plan | Modify plan |
-| `deletePlan` | { id } | { success } | Remove plan |
-| `addMilestone` | { planId, milestone } | Plan | Add milestone |
-| `addExpense` | { planId, expense } | Plan | Add expense |
-
-## 🗄️ Data Types
-
-### Transaction
-
-```typescript
-interface Transaction {
-  transactionId: string;
-  accountId: string;
-  amount: number;
-  currency: string;
-  date: string;
-  name: string;
-  merchantName?: string;
-  categoryId?: string;
-  category?: string;        // Legacy field
-  subcategory?: string;
-  pending: boolean;
-  type: 'place' | 'digital' | 'special';
-}
-```
-
-### Category
-
-```typescript
-interface Category {
-  id: string;
-  name: string;
-  color: string;
-  description?: string;
-  transactionCount: number;
-  totalAmount: number;
-  avgAmount: number;
-  createdAt: string;
-  isDefault: boolean;
-}
-```
-
-### Budget
-
-```typescript
-interface Budget {
-  id: string;
-  userId: string;
-  name: string;
-  budgetType: 'category' | 'total';
-  categoryId?: string;
-  amount: number;
-  spent: number;
-  remaining: number;
-  percentage: number;
-  period: 'monthly';
-  month?: number;
-  year?: number;
-  startDate: string;
-  isAutoGenerated: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-```
-
-## 🧪 Testing
-
-### Running Tests
-
-```bash
-# Run all tests
-npm test
-
-# Run specific test
-npm test -- auth.test.ts
-
-# Run with coverage report
-npm test -- --coverage
-
-# Run in watch mode
-npm test -- --watch
-```
-
-### Test Structure
-
-Tests are organized by router:
-
-```
-__tests__/
-├── auth.test.ts           # Auth router tests
-├── categories.test.ts     # Categories router tests
-├── transactions.test.ts   # Transactions router tests
-├── budgets.test.ts        # Budgets router tests
-├── dashboard.test.ts       # Dashboard router tests
-├── investments.test.ts    # Investments router tests
-├── planner.test.ts        # Planner router tests
-├── routers.test.ts        # Router exports verification
-└── categories.integration.test.ts  # Integration tests
-```
-
-### Writing Tests
-
-```typescript
-describe('Router Name', () => {
-  beforeEach(() => {
-    // Setup test context
-  });
-
-  test('should do something', async () => {
-    // Test case
-  });
-});
-```
-
-## 🔐 Authentication Flow
-
-```
-1. User signs up → Cognito sends confirmation code
-2. User confirms email → Cognito creates user
-3. User signs in → Cognito returns tokens
-4. TRPC uses tokens to identify user
-5. All procedures use protectedProcedure
-```
-
-## 🏗️ Deployment
-
-### Build
-
-```bash
+npm run dev
 npm run build
+npm test
 ```
 
-### Deploy to AWS
+The local API listens on `PORT` or `3001` by default.
 
-```bash
-cd ../cdk
-npm run deploy
-```
+## Notes
 
-### Local Development
-
-The API runs as a Lambda function. For local development, use the CDK mock or test against deployed resources.
-
-## 📦 Dependencies
-
-### Core
-
-- `zod` - Schema validation
-- `@trpc/server` - TRPC framework
-- `@trpc/client` - TRPC client
-- `@aws-sdk/client-dynamodb` - DynamoDB client
-- `@aws-sdk/lib-dynamodb` - DynamoDB document client
-- `aws-lambda` - Lambda types
-
-### Testing
-
-- `jest` - Test framework
-- `@types/jest` - Jest types
-- `ts-jest` - TypeScript Jest transformer
-
-## 🔧 Configuration
-
-### Environment Variables
-
-```typescript
-// src/process.ts
-export const config = {
-  REGION: process.env.REGION || 'us-east-1',
-  TABLE_NAME: process.env.TABLE_NAME,
-  USER_POOL_ID: process.env.USER_POOL_ID,
-  CLIENT_ID: process.env.CLIENT_ID,
-  DEMO_MODE: process.env.DEMO_MODE === 'true',
-};
-```
-
-### DynamoDB Tables
-
-| Table | Key | Description |
-|-------|-----|-------------|
-| Users | PK: USER#{userId}, SK: METADATA | User profiles |
-| Transactions | PK: USER#{userId}, SK: TRANSACTION#{id} | Transaction data |
-| Categories | PK: USER#{userId}, SK: CATEGORY#{id} | User categories |
-| Budgets | PK: USER#{userId}, SK: BUDGET#{id} | Budget data |
-| Plans | PK: USER#{userId}, SK: PLAN#{id} | Savings plans |
-| Investments | PK: USER#{userId}, SK: INVESTMENT#{id} | Investments |
-
-## 📝 Scripts
-
-```bash
-npm test              # Run all tests
-npm test -- --watch  # Watch mode
-npm test -- --coverage # Coverage report
-```
+- The current `protectedProcedure` is a pass-through alias while the trading API is in demo/public mode.
+- Alpaca order submission is not implemented yet; the pipeline is ready for an execution adapter.
+- Tests currently pass with no test files present.

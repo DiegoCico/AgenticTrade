@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { decisionLog, demoPortfolio, executedTrades, tradePlans } from './demoData';
 import { getMarketSnapshot } from './marketData';
 import { calculateSignals } from './signals';
+import { buildMarketContext } from './marketContext';
 import { MODEL_NAME, PROMPT_VERSION, requestAiDecisions } from './aiDecisionEngine';
 import { validateDecision } from './riskValidator';
 import { createTradeOutcome } from './tradePlanner';
@@ -17,7 +18,8 @@ export async function runTradingPipeline(input: RunTradingPipelineInput = {}): P
     : demoPortfolio.positions.map((position) => position.symbol);
   const snapshot = await getMarketSnapshot(symbols);
   const signals = calculateSignals(demoPortfolio, snapshot);
-  const aiDecisions = await requestAiDecisions({ portfolio: demoPortfolio, signals });
+  const marketContext = await buildMarketContext({ portfolio: demoPortfolio, snapshot, signals });
+  const aiDecisions = await requestAiDecisions({ portfolio: demoPortfolio, signals, marketContext });
 
   const runDecisionLog = aiDecisions.map((aiDecision) => {
     const riskReview = validateDecision(aiDecision, demoPortfolio);
@@ -35,6 +37,7 @@ export async function runTradingPipeline(input: RunTradingPipelineInput = {}): P
       input: {
         portfolio: demoPortfolio,
         signals,
+        marketContext,
       },
       aiDecision,
       riskReview,
@@ -48,13 +51,14 @@ export async function runTradingPipeline(input: RunTradingPipelineInput = {}): P
     portfolio: demoPortfolio,
     snapshot,
     signals,
+    marketContext,
     decisions: runDecisionLog,
     tradePlans,
     executedTrades,
   };
 }
 
-export function getTradingState(): Omit<PipelineResult, 'snapshot' | 'signals'> {
+export function getTradingState(): Omit<PipelineResult, 'snapshot' | 'signals' | 'marketContext'> {
   return {
     portfolio: demoPortfolio,
     decisions: decisionLog,

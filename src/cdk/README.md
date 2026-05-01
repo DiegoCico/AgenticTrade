@@ -1,447 +1,164 @@
-# Agentictrade CDK Infrastructure
+# AgenticTrade CDK
 
-AWS Cloud Development Kit (CDK) infrastructure as code for deploying the Agentictrade platform.
+AWS CDK infrastructure for AgenticTrade.
 
-## 🏗️ Architecture
+## Current Stacks
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           AWS Region                                    │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐    │
-│  │                    VPC (Optional)                            │    │
-│  │  ┌─────────────────────────────────────────────────────┐    │    │
-│  │  │                   Lambda Functions                   │    │    │
-│  │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │    │    │
-│  │  │  │  Auth   │ │   API   │ │  Sync   │ │  Cron   │   │    │    │
-│  │  │  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘   │    │    │
-│  │  │       └────────────┼───────────┼───────────┘          │    │    │
-│  │  └──────────────────┼───────────┼────────────────────┘    │    │
-│  │                     ▼           ▼                           │    │
-│  │  ┌─────────────────────────────────────────────────────┐    │    │
-│  │  │               API Gateway REST API                  │    │    │
-│  │  └─────────────────────┬───────────────────────────────┘    │    │
-│  └───────────────────────┬─────────────────────────────────────┘    │
-│                          ▼                                          │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │                    DynamoDB Tables                          │  │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────┐    │  │
-│  │  │   Users     │ │ Transactions│ │     Categories     │    │  │
-│  │  │  (GSI: email)│ │            │ │                     │    │  │
-│  │  └─────────────┘ └─────────────┘ └─────────────────────┘    │  │
-│  │  ┌─────────────┐ ┌─────────────┐                           │  │
-│  │  │   Budgets   │ │   Plans    │                           │  │
-│  │  └─────────────┘ └─────────────┘                           │  │
-│  └─────────────────────────────────────────────────────────────┘  │
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │                   Cognito User Pool                        │  │
-│  │  ┌─────────────────────────────────────────────────────┐  │  │
-│  │  │  • Email verification                               │  │  │
-│  │  │  • Password policies                                │  │  │
-│  │  │  • OAuth 2.0 scopes                                │  │  │
-│  │  │  • Custom attributes                                │  │  │
-│  │  └─────────────────────────────────────────────────────┘  │  │
-│  └─────────────────────────────────────────────────────────────┘  │
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │                   S3 + CloudFront                          │  │
-│  │  ┌─────────────┐    ┌─────────────────────────────────┐  │  │
-│  │  │  Frontend   │───►│     CloudFront Distribution     │  │  │
-│  │  │  Bucket     │    │     (CDN + SSL/TLS)            │  │  │
-│  │  └─────────────┘    └─────────────────────────────────┘  │  │
-│  └─────────────────────────────────────────────────────────────┘  │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+`bin/app.ts` creates these stacks for the selected stage:
 
-## 📁 Directory Structure
+| Stack | File | Purpose |
+| --- | --- | --- |
+| `AgentictradeDynamo-{stage}` | `lib/dynamo-stack.ts` | DynamoDB data table |
+| `AgentictradeAlpacaSecrets-{stage}` | `lib/alpaca-secrets-stack.ts` | Alpaca API credentials in Secrets Manager |
+| `AgentictradeLlmSecrets-{stage}` | `lib/llm-secrets-stack.ts` | LLM API credentials in Secrets Manager |
+| `AgentictradeApi-{stage}` | `lib/api-stack.ts` | Lambda tRPC handler, scheduled trading Lambda, EventBridge Scheduler, and API Gateway HTTP API |
+| `AgentictradeDns-{stage}` | `lib/dns-stack.ts` | Route53 hosted zone and certificate support |
+| `AgentictradeWeb-{stage}` | `lib/web-stack.ts` | S3 + CloudFront frontend hosting |
 
-```
+## Directory Structure
+
+```txt
 src/cdk/
-├── bin/
-│   └── app.ts              # CDK application entry point
-│
-├── lib/
-│   ├── api-stack.ts        # API Gateway + Lambda stack
-│   ├── cognito-stack.ts    # Cognito User Pool stack
-│   ├── dynamo-stack.ts      # DynamoDB tables stack
-│   ├── web-stack.ts        # S3 + CloudFront stack
-│   ├── dns-stack.ts        # Route53 DNS stack
-│   └── ses-stack.ts        # SES email stack
-│
-├── src/
-│   ├── handler.ts          # Lambda function code
-│   └── process.ts         # Lambda environment config
-│
-├── scripts/
-│   └── deploy.sh          # Deployment script
-│
-├── cdk.json               # CDK configuration
-├── stage.ts              # Stage definition
-├── package.json         # Dependencies
-└── tsconfig.json        # TypeScript config
+  bin/
+    app.ts
+  lib/
+    alpaca-secrets-stack.ts
+    llm-secrets-stack.ts
+    api-stack.ts
+    dns-stack.ts
+    dynamo-stack.ts
+    web-stack.ts
+  cdk.json
+  package.json
+  stage.ts
+  tsconfig.json
 ```
 
-## 🚀 Getting Started
+## Alpaca Secret
 
-### Prerequisites
+`AlpacaSecretsStack` creates:
 
-- AWS CLI configured with credentials
-- Node.js 18+
-- CDK v2 installed globally
-
-```bash
-npm install -g aws-cdk@2
+```txt
+agentictrade-api/{stage}/alpaca
 ```
 
-### Installation
+Default JSON shape:
+
+```json
+{
+  "ALPACA_API_KEY": "replace-me",
+  "ALPACA_SECRET_KEY": "replace-me",
+  "ALPACA_BASE_URL": "https://paper-api.alpaca.markets/v2",
+  "ALPACA_DATA_URL": "https://data.alpaca.markets",
+  "ALPACA_PAPER": "true"
+}
+```
+
+After deploying the stack, update the secret value in AWS Secrets Manager with your real Alpaca paper trading key and secret.
+
+The API Lambda receives:
+
+```txt
+ALPACA_SECRET_ARN
+```
+
+and is granted read access to that secret.
+
+## LLM Secret
+
+`LlmSecretsStack` creates:
+
+```txt
+agentictrade-api/{stage}/llm
+```
+
+Default JSON shape:
+
+```json
+{
+  "LLM_PROVIDER": "openai-compatible",
+  "LLM_API_KEY": "replace-me",
+  "LLM_BASE_URL": "https://api.openai.com/v1/chat/completions",
+  "LLM_MODEL": "replace-me",
+  "LLM_MARKET_CONTEXT_ENABLED": "false"
+}
+```
+
+The API Lambda receives `LLM_SECRET_ARN` and is granted read access to that secret. Set `LLM_MARKET_CONTEXT_ENABLED` to `"true"` after the key, endpoint, and model are configured.
+
+## API Stack
+
+`ApiStack` creates:
+
+- Node.js 20 Lambda using `src/api/src/handler.ts`
+- Node.js 20 scheduled Lambda using `src/api/src/scheduled-trading.ts`
+- EventBridge Scheduler rule for weekday trading evaluations
+- API Gateway HTTP API
+- `/trpc/{proxy+}` route
+- `/health` route
+- `/hello` route
+- DynamoDB read/write permissions
+- Alpaca secret read permissions
+- LLM secret read permissions
+
+Important Lambda environment values:
+
+```txt
+NODE_ENV
+STAGE
+SERVICE_NAME
+DYNAMODB_TABLE_NAME
+ALPACA_SECRET_ARN
+LLM_SECRET_ARN
+```
+
+Scheduled trading evaluation:
+
+```txt
+cron(0 10 ? * MON-FRI *)
+timezone: America/New_York
+```
+
+This runs once per weekday at 10:00 AM New York time, 30 minutes after the regular U.S. market open. The scheduled Lambda gets the same DynamoDB and secret permissions as the API Lambda.
+
+## Web Stack
+
+`WebStack` serves the frontend build from S3 through CloudFront. Build the frontend before deploying the web stack:
 
 ```bash
-cd src/cdk
+npm -w src/frontend run build
+```
+
+## Commands
+
+From `src/cdk`:
+
+```bash
 npm install
+npm run build
+npm run cdk:synth
+npm run cdk:diff
+npm run cdk:deploy:dev
 ```
 
-### Bootstrap CDK
-
-First time deployment requires CDK bootstrap:
+Destroy dev:
 
 ```bash
-cdk bootstrap
+npm run cdk:destroy:dev
 ```
 
-Or with specific account/region:
+## Stage Selection
+
+Most commands accept a stage context:
 
 ```bash
-cdk bootstrap aws://ACCOUNT-ID/REGION
+npx cdk synth -c stage=dev
+npx cdk deploy --all -c stage=prod
 ```
 
-## 🚀 Deployment
+`stage.ts` resolves stage-specific defaults such as Lambda memory and timeout.
 
-### Deploy All Stacks
+## Notes
 
-```bash
-# Deploy to development
-npm run deploy
-
-# Deploy with diff (dry run)
-cdk diff
-
-# Deploy to specific stage
-cdk deploy --profile production
-```
-
-### Deploy Individual Stacks
-
-```bash
-# Deploy DynamoDB tables
-cdk deploy AgentictradeDynamo-dev
-
-# Deploy Cognito
-cdk deploy AgentictradeCognito-dev
-
-# Deploy API
-cdk deploy AgentictradeApi-dev
-
-# Deploy Web (frontend)
-cdk deploy AgentictradeWeb-dev
-```
-
-### Destroy Stacks
-
-```bash
-# Destroy all
-cdk destroy
-
-# Destroy specific stack
-cdk destroy AgentictradeDynamo-dev
-```
-
-## 📦 Stacks
-
-### DynamoDB Stack (`dynamo-stack.ts`)
-
-Creates all DynamoDB tables with GSIs:
-
-| Table | Primary Key | GSI | Description |
-|-------|-------------|-----|-------------|
-| Users | PK: USER#{userId}, SK: METADATA | EmailIndex (email → userId) | User profiles |
-| Transactions | PK: USER#{userId}, SK: TRANSACTION#{id} | - | Transaction data |
-| Categories | PK: USER#{userId}, SK: CATEGORY#{id} | - | User categories |
-| Budgets | PK: USER#{userId}, SK: BUDGET#{id} | - | Budget data |
-| Plans | PK: USER#{userId}, SK: PLAN#{id} | - | Savings plans |
-| Investments | PK: USER#{userId}, SK: INVESTMENT#{id} | - | Investment data |
-
-### Cognito Stack (`cognito-stack.ts`)
-
-Creates Cognito User Pool with:
-
-- Email verification
-- Password policy (min 8 chars, requires numbers)
-- Custom attributes:
-  - `given_name`
-  - `family_name`
-- App client for API access
-
-### API Stack (`api-stack.ts`)
-
-Creates:
-
-- **API Gateway REST API** - Main API entry point
-- **Lambda Functions**:
-  - `AgentictradeApiFunction` - Main API handler
-  - `AgentictradeCronFunction` - Scheduled tasks
-- **IAM Roles** - Execution permissions
-- **Environment Variables**:
-  - `TABLE_NAME` - DynamoDB table name
-  - `USER_POOL_ID` - Cognito pool ID
-  - `CLIENT_ID` - Cognito client ID
-  - `REGION` - AWS region
-
-### Web Stack (`web-stack.ts`)
-
-Creates:
-
-- **S3 Bucket** - Static website hosting
-- **CloudFront Distribution** - CDN with SSL
-- **Origin Access Identity** - Secure bucket access
-
-### DNS Stack (`dns-stack.ts`)
-
-Optional Route53 integration:
-
-- Hosted zone lookup
-- A records for CloudFront
-- AAAA records (IPv6)
-
-## 🔧 Configuration
-
-### Stage Configuration (`stage.ts`)
-
-```typescript
-export class AgentictradeStage extends Stage {
-  constructor(parent: App, id: string, props: StageProps) {
-    super(parent, id, {
-      env: {
-        account: props.account || process.env.CDK_DEFAULT_ACCOUNT,
-        region: props.region || process.env.CDK_DEFAULT_REGION || 'us-east-1',
-      },
-      tags: {
-        project: 'agentictrade',
-        stage: id,
-      },
-    });
-
-    new AgentictradeStack(this, 'Agentictrade', { stage: id });
-  }
-}
-```
-
-### Context Variables
-
-```bash
-# Set stage name
-cdk deploy -c stage=production
-
-# Set domain name
-cdk deploy -c domainName=api.agentictrade.app
-```
-
-## 📝 CDK Commands
-
-```bash
-# List all stacks
-cdk list
-
-# Show diff before deploy
-cdk diff
-
-# Synthesize to CloudFormation
-cdk synth
-
-# Deploy with changes
-cdk deploy --require-approval never
-
-# View logs
-cdk logs
-
-# Check for security issues
-cdk doctor
-```
-
-## 🔐 IAM Permissions
-
-Required IAM permissions for deployment:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "cloudformation:*",
-        "s3:*",
-        "dynamodb:*",
-        "lambda:*",
-        "apigateway:*",
-        "cognito-idp:*",
-        "cloudfront:*",
-        "route53:*",
-        "iam:*"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-## 🏗️ Lambda Function
-
-The main Lambda handler (`src/handler.ts`) handles all API requests:
-
-```typescript
-import { lambdaHandler } from './server';
-
-export const handler = lambdaHandler;
-```
-
-Environment variables are loaded from `src/process.ts`:
-
-```typescript
-export const config = {
-  REGION: process.env.REGION || 'us-east-1',
-  TABLE_NAME: process.env.TABLE_NAME || 'agentictrade-users',
-  USER_POOL_ID: process.env.USER_POOL_ID,
-  CLIENT_ID: process.env.CLIENT_ID,
-  DEMO_MODE: process.env.DEMO_MODE === 'true',
-};
-```
-
-## 📊 Monitoring
-
-### CloudWatch Logs
-
-All Lambda functions log to CloudWatch:
-
-```bash
-# View logs for API function
-aws logs tail /aws/lambda/AgentictradeApiFunction --follow
-```
-
-### X-Ray Tracing
-
-Enable X-Ray for distributed tracing:
-
-```typescript
-// In api-stack.ts
-apiFunction.addTracing(Tracing.ENABLED);
-```
-
-## 🔄 CI/CD Pipeline
-
-### GitHub Actions
-
-Deploy on push to main:
-
-```yaml
-name: Deploy
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 18
-      - run: cd src/cdk && npm install && npm run deploy
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-```
-
-## 📦 Dependencies
-
-```json
-{
-  "dependencies": {
-    "aws-cdk-lib": "^2.0.0",
-    "aws-lambda": "^1.0.0",
-    "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/lib-dynamodb": "^3.0.0",
-    "zod": "^3.0.0",
-    "trpc-server": "^10.0.0"
-  },
-  "devDependencies": {
-    "aws-cdk": "^2.0.0",
-    "typescript": "^5.0.0"
-  }
-}
-```
-
-## 🧪 Testing
-
-### CDK Assertions
-
-```typescript
-import { Template } from 'aws-cdk-lib/assertions';
-import { Stack } from 'aws-cdk-lib';
-
-test('S3 bucket created', () => {
-  const stack = new Stack();
-  // ... add resources ...
-  
-  const template = Template.fromStack(stack);
-  template.hasResourceProperties('AWS::S3::Bucket', {
-    BucketName: 'agentictrade-frontend',
-  });
-});
-```
-
-## 📝 Notes
-
-### First Deployment
-
-1. Bootstrap CDK in your account
-2. Deploy `AgentictradeDynamo-dev` first (tables needed for API)
-3. Deploy `AgentictradeCognito-dev`
-4. Deploy `AgentictradeApi-dev`
-5. Deploy `AgentictradeWeb-dev`
-
-### Database Cleanup
-
-⚠️ **Warning**: Deleting DynamoDB stacks will **permanently delete all data**. Ensure backups before destroying stacks.
-
-### Cost Optimization
-
-- Use DynamoDB on-demand capacity for development
-- Enable auto-scaling for production
-- Use CloudFront price classes for cost control
-
-## 🐛 Troubleshooting
-
-### Bootstrap Errors
-
-```bash
-# Re-bootstrap with additional permissions
-cdk bootstrap --cloudformation-execution-policies arn:aws:iam::aws:policy/AdministratorAccess
-```
-
-### Permission Errors
-
-```bash
-# Verify AWS credentials
-aws sts get-caller-identity
-```
-
-### Stack Update Failures
-
-```bash
-# Check CloudFormation events
-aws cloudformation describe-stack-events --stack-name AgentictradeDynamo-dev
-```
+- The CDK project currently includes a `setup-alpaca-secrets` package script, but `src/cdk/scripts/` is not present in this worktree. Update the Alpaca secret directly in AWS Secrets Manager unless that script is restored.
+- Generated folders such as `dist/`, `cdk.out/`, and `node_modules/` should not be committed.

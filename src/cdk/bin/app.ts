@@ -1,20 +1,16 @@
 import "source-map-support/register";
 import * as cdk from "aws-cdk-lib";
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
-import * as iam from "aws-cdk-lib/aws-iam";
 import { resolveStage } from "../stage";
 
 import { ApiStack } from "../lib/api-stack";
 import { WebStack } from "../lib/web-stack";
 import { DynamoStack } from "../lib/dynamo-stack";
-import { CognitoStack } from "../lib/cognito-stack";
-import { SesStack } from "../lib/ses-stack";
 import { AlpacaSecretsStack } from "../lib/alpaca-secrets-stack";
+import { LlmSecretsStack } from "../lib/llm-secrets-stack";
 import { DnsStack } from "../lib/dns-stack";
 
 const app = new cdk.App();
-
-const SES_FROM_EMAIL = "cicotosted@gmail.com";
 
 // Stage config (prod | beta)
 const cfg = resolveStage(app) as {
@@ -45,16 +41,15 @@ const dynamo = new DynamoStack(app, `AgentictradeDynamo-${cfg.name}`, {
   serviceName: "agentictrade",
 });
 
-// ---------------- COGNITO ----------------
-const cognito = new CognitoStack(app, `AgentictradeCognito-${cfg.name}`, {
-  env: { account, region },
-  stage: cfg.name,
-  serviceName: "agentictrade",
-  ddbTable: dynamo.table,
-});
-
 // ---------------- ALPACA SECRETS ----------------
 const alpacaSecrets = new AlpacaSecretsStack(app, `AgentictradeAlpacaSecrets-${cfg.name}`, {
+  env: { account, region },
+  stage: cfg.name,
+  serviceName: "agentictrade-api",
+});
+
+// ---------------- LLM SECRETS ----------------
+const llmSecrets = new LlmSecretsStack(app, `AgentictradeLlmSecrets-${cfg.name}`, {
   env: { account, region },
   stage: cfg.name,
   serviceName: "agentictrade-api",
@@ -98,10 +93,8 @@ const api = new ApiStack(app, `AgentictradeApi-${cfg.name}`, {
   },
 
   ddbTable: dynamo.table,
-  userPool: cognito.userPool,
-  userPoolClient: cognito.userPoolClient,
-  sesEmail: SES_FROM_EMAIL,
   alpacaSecret: alpacaSecrets.alpacaSecret,
+  llmSecret: llmSecrets.llmSecret,
 });
 
 // ---------------- WEB STACK ----------------
@@ -124,24 +117,16 @@ const web = new WebStack(app, `AgentictradeWeb-${cfg.name}`, {
   apiDomainName,
   apiPaths: ["/trpc/*", "/health", "/hello"],
 
-  domainName: "agentictrade.name",
+  domainName: "agentictrade.online",
   hostedZone: dns.zone,
   certificate: dns.webCert,
 });
 
 web.addDependency(dns);
 
-// ---------------- SES ----------------
-const ses = new SesStack(app, `AgentictradeSes-${cfg.name}`, {
-  env: { account, region },
-  stage: cfg.name,
-  serviceName: "agentictrade",
-  fromEmail: SES_FROM_EMAIL,
-});
-
 // ---------------- TAGGING ----------------
 if (cfg.tags) {
-  [dynamo, api, cognito, ses, web, alpacaSecrets, dns].forEach((stack) => {
+  [dynamo, api, web, alpacaSecrets, llmSecrets, dns].forEach((stack) => {
     Object.entries(cfg.tags!).forEach(([k, v]) => {
       cdk.Tags.of(stack).add(k, v);
     });
