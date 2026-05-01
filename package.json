@@ -1,0 +1,58 @@
+{
+  "name": "root",
+  "private": true,
+  "workspaces": [
+    "src/frontend",
+    "src/api",
+    "src/cdk"
+  ],
+  "scripts": {
+    "// dev": "================= DEV =================",
+    "dev:frontend": "npm -w src/frontend run dev",
+    "dev:api": "DEMO_MODE=true npm -w src/api run dev",
+    "dev": "concurrently -k -n FRONTEND,API \"npm -w src/frontend run dev\" \"DEMO_MODE=true npm -w src/api run dev\"",
+    "// build": "=============== BUILD ================",
+    "build:frontend": "npm -w src/frontend run build",
+    "build:api": "npm -w src/api run build",
+    "build": "npm -w src/frontend run build && npm -w src/api run build",
+    "// quality": "============= QUALITY ===============",
+    "format": "prettier -w .",
+    "lint": "eslint . --ext .ts,.tsx",
+    "test:frontend": "npm -w src/frontend run test",
+    "test:api": "npm -w src/api run test",
+    "test": "npm -w src/api run test && npm -w src/frontend run test",
+    "// start": "=============== START ===============",
+    "start": "concurrently -k -n FRONTEND,API \"npm -w src/frontend run dev\" \"DEMO_MODE=true npm -w src/api run dev\"",
+    "// cdk": "================= CDK =================",
+    "bootstrap": "npm -w src/cdk run cdk:bootstrap",
+    "synth": "npm -w src/cdk run cdk:synth",
+    "diff": "npm -w src/cdk run cdk:diff",
+    "deploy:dev": "npx src/cdk deploy --all --require-approval never -c stage=dev",
+    "deploy:prod": "npx src/cdk deploy --all --require-approval never -c stage=prod",
+    "destroy": "npm -w src/cdk run cdk:destroy",
+    "// misc": "=============== MISC =================",
+    "clean": "rimraf node_modules src/**/node_modules src/cdk/cdk.out || true"
+  },
+  "devDependencies": {
+    "@babel/preset-typescript": "^7.28.5",
+    "aws-sdk-client-mock": "^4.1.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.10.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.3",
+    "rimraf": "^6.0.1",
+    "ts-jest": "^29.4.5",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.908.0",
+    "@mui/icons-material": "^7.3.4",
+    "aws-jwt-verify": "^5.1.1",
+    "framer-motion": "^12.34.0",
+    "heic2any": "^0.0.4",
+    "import-local": "^3.2.0",
+    "recharts": "^3.3.0",
+    "rollup": "^4.52.4",
+    "typescript": "^5.4.0"
+  }
+}

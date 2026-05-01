@@ -1,0 +1,202 @@
+{
+  "account": {
+    "name": "AgenticTrade AI",
+    "mode": "Paper Trading",
+    "lastUpdated": "2026-04-30T09:35:00-04:00",
+    "cash": 12842.25,
+    "buyingPower": 25684.5
+  },
+  "portfolio": {
+    "totalValue": 184263.78,
+    "dayChange": 2384.16,
+    "dayChangePercent": 1.31,
+    "totalReturn": 21472.6,
+    "totalReturnPercent": 13.18,
+    "riskScore": 62,
+    "winRate": 58.4
+  },
+  "performance": {
+    "1D": [
+      { "label": "9:30", "value": 181879 },
+      { "label": "10:00", "value": 182245 },
+      { "label": "10:30", "value": 181640 },
+      { "label": "11:00", "value": 182980 },
+      { "label": "11:30", "value": 183411 },
+      { "label": "12:00", "value": 182904 },
+      { "label": "12:30", "value": 183728 },
+      { "label": "1:00", "value": 184264 }
+    ],
+    "1W": [
+      { "label": "Mon", "value": 178420 },
+      { "label": "Tue", "value": 179884 },
+      { "label": "Wed", "value": 180212 },
+      { "label": "Thu", "value": 181906 },
+      { "label": "Fri", "value": 184264 }
+    ],
+    "1M": [
+      { "label": "Apr 1", "value": 171240 },
+      { "label": "Apr 7", "value": 173105 },
+      { "label": "Apr 14", "value": 176820 },
+      { "label": "Apr 21", "value": 180556 },
+      { "label": "Apr 30", "value": 184264 }
+    ],
+    "3M": [
+      { "label": "Feb", "value": 159720 },
+      { "label": "Mar", "value": 168430 },
+      { "label": "Apr", "value": 184264 }
+    ],
+    "1Y": [
+      { "label": "May", "value": 142800 },
+      { "label": "Jul", "value": 149640 },
+      { "label": "Sep", "value": 151290 },
+      { "label": "Nov", "value": 162880 },
+      { "label": "Jan", "value": 169410 },
+      { "label": "Mar", "value": 177940 },
+      { "label": "Apr", "value": 184264 }
+    ],
+    "ALL": [
+      { "label": "Start", "value": 100000 },
+      { "label": "Q2 24", "value": 111450 },
+      { "label": "Q3 24", "value": 119880 },
+      { "label": "Q4 24", "value": 132220 },
+      { "label": "Q1 25", "value": 148610 },
+      { "label": "Q2 25", "value": 158970 },
+      { "label": "Q3 25", "value": 171330 },
+      { "label": "Now", "value": 184264 }
+    ]
+  },
+  "positions": [
+    {
+      "symbol": "NVDA",
+      "name": "NVIDIA",
+      "shares": 42,
+      "price": 928.36,
+      "marketValue": 38991.12,
+      "dayChangePercent": 2.44,
+      "allocation": 21.2,
+      "aiSignal": "Hold"
+    },
+    {
+      "symbol": "MSFT",
+      "name": "Microsoft",
+      "shares": 71,
+      "price": 421.58,
+      "marketValue": 29932.18,
+      "dayChangePercent": 0.86,
+      "allocation": 16.2,
+      "aiSignal": "Buy"
+    },
+    {
+      "symbol": "TSLA",
+      "name": "Tesla",
+      "shares": 94,
+      "price": 177.92,
+      "marketValue": 16724.48,
+      "dayChangePercent": -1.18,
+      "allocation": 9.1,
+      "aiSignal": "Trim"
+    },
+    {
+      "symbol": "SPY",
+      "name": "S&P 500 ETF",
+      "shares": 83,
+      "price": 512.24,
+      "marketValue": 42515.92,
+      "dayChangePercent": 0.34,
+      "allocation": 23.1,
+      "aiSignal": "Hold"
+    },
+    {
+      "symbol": "COIN",
+      "name": "Coinbase",
+      "shares": 56,
+      "price": 238.04,
+      "marketValue": 13330.24,
+      "dayChangePercent": 3.72,
+      "allocation": 7.2,
+      "aiSignal": "Buy"
+    }
+  ],
+  "trades": [
+    {
+      "time": "9:42 AM",
+      "action": "Bought",
+      "symbol": "COIN",
+      "quantity": 8,
+      "price": 232.18,
+      "reason": "Momentum model confirmed breakout with rising volume."
+    },
+    {
+      "time": "10:18 AM",
+      "action": "Trimmed",
+      "symbol": "TSLA",
+      "quantity": 12,
+      "price": 179.66,
+      "reason": "Reduced exposure after volatility crossed risk threshold."
+    },
+    {
+      "time": "11:56 AM",
+      "action": "Held",
+      "symbol": "NVDA",
+      "quantity": 0,
+      "price": 928.36,
+      "reason": "Trend remains positive, but position is already near allocation cap."
+    }
+  ],
+  "watchlist": [
+    { "symbol": "AMD", "price": 164.2, "changePercent": 1.74 },
+    { "symbol": "META", "price": 493.75, "changePercent": -0.28 },
+    { "symbol": "AAPL", "price": 198.91, "changePercent": 0.41 },
+    { "symbol": "PLTR", "price": 27.86, "changePercent": 4.13 }
+  ],
+  "plans": [
+    {
+      "id": "plan-001",
+      "symbol": "AMD",
+      "name": "Advanced Micro Devices",
+      "side": "Buy",
+      "triggerPrice": 158,
+      "currentPrice": 164.2,
+      "quantity": 25,
+      "confidence": 74,
+      "status": "Waiting for pullback",
+      "reason": "Buy only if price retests support while semiconductor momentum stays positive."
+    },
+    {
+      "id": "plan-002",
+      "symbol": "NVDA",
+      "name": "NVIDIA",
+      "side": "Sell",
+      "triggerPrice": 965,
+      "currentPrice": 928.36,
+      "quantity": 10,
+      "confidence": 68,
+      "status": "Take profit target",
+      "reason": "Trim a partial position if the rally reaches the next resistance zone."
+    },
+    {
+      "id": "plan-003",
+      "symbol": "TSLA",
+      "name": "Tesla",
+      "side": "Sell",
+      "triggerPrice": 170,
+      "currentPrice": 177.92,
+      "quantity": 18,
+      "confidence": 71,
+      "status": "Risk stop",
+      "reason": "Reduce exposure if the position breaks below the AI volatility floor."
+    },
+    {
+      "id": "plan-004",
+      "symbol": "META",
+      "name": "Meta Platforms",
+      "side": "Buy",
+      "triggerPrice": 485,
+      "currentPrice": 493.75,
+      "quantity": 12,
+      "confidence": 63,
+      "status": "Watching valuation",
+      "reason": "Enter if price moves closer to the model's fair value band."
+    }
+  ]
+}

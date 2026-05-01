@@ -1,0 +1,44 @@
+{
+  "name": "cdk",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -w -p tsconfig.json",
+    "prepare": "echo skip",
+    "cdk": "cdk",
+    "cdk:bootstrap": "npx cdk bootstrap",
+    "cdk:synth": "npx cdk synth",
+    "cdk:diff": "npx cdk diff",
+    "cdk:deploy:dev": "npm run build && npx cdk deploy --require-approval --all never -c stage=dev",
+    "cdk:deploy:beta": "npm run build && npx cdk deploy --require-approval never -c stage=beta",
+    "cdk:deploy:prod": "npm run build && ALLOW_PROD_DEPLOY=true npx cdk deploy --require-approval never -c stage=prod",
+    "cdk:destroy": "npx cdk destroy --force",
+    "cdk:destroy:dev": "npx cdk destroy --force -c stage=dev",
+    "cdk:destroy:beta": "npx cdk destroy --force -c stage=beta",
+    "cdk:destroy:prod": "npx cdk destroy --force -c stage=prod",
+    "setup-plaid-secrets": "ts-node scripts/setup-plaid-secrets.ts"
+  },
+  "dependencies": {
+    "@aws-cdk/aws-cognito-identitypool-alpha": "^2.114.1-alpha.0",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "@aws-cdk/aws-apigatewayv2-alpha": "^2.114.1-alpha.0",
+    "@aws-cdk/aws-apigatewayv2-integrations-alpha": "^2.114.1-alpha.0",
+    "@aws-sdk/client-cloudformation": "^3.952.0",
+    "@aws-sdk/client-secrets-manager": "^3.952.0",
+    "@swc/core": "^1.13.5",
+    "@swc/helpers": "^0.5.17",
+    "@types/node": "^20.19.20",
+    "aws-cdk": "^2.1030.0",
+    "aws-cdk-lib": "^2.232.2",
+    "constructs": "^10.4.4",
+    "esbuild": "^0.23.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}

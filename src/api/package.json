@@ -1,0 +1,54 @@
+{
+  "name": "api",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "jest --passWithNoTests --runInBand --forceExit",
+    "test:watch": "jest --watch",
+    "sync-bank-data": "tsx src/scripts/syncBankData.ts",
+    "sync-bank-data:dry-run": "tsx src/scripts/syncBankData.ts --dry-run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.911.0",
+    "@aws-sdk/client-lambda": "^3.932.0",
+    "@aws-sdk/client-s3": "^3.911.0",
+    "@aws-sdk/client-secrets-manager": "^3.952.0",
+    "@aws-sdk/client-ses": "^3.908.0",
+    "@aws-sdk/client-sesv2": "^3.911.0",
+    "@aws-sdk/lib-dynamodb": "^3.921.0",
+    "@aws-sdk/s3-request-presigner": "^3.911.0",
+    "@aws-sdk/types": "^3.910.0",
+    "@smithy/smithy-client": "^4.9.1",
+    "@smithy/types": "^4.8.0",
+    "@trpc/server": "^10.45.2",
+    "@types/cors": "^2.8.19",
+    "aws-jwt-verify": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "plaid": "^11.0.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.155",
+    "@types/cookie": "^0.6.0",
+    "@types/express": "^4.17.23",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.19.26",
+    "@types/supertest": "^2.0.16",
+    "aws-sdk-client-mock": "^4.1.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.6.2",
+    "supertest": "^6.3.4",
+    "ts-jest": "^29.4.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.45.0"
+  }
+}

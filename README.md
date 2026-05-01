@@ -1,0 +1,376 @@
+# Agentictrade - Personal Finance Management Platform
+
+A comprehensive personal finance management platform built with TypeScript, React, AWS CDK, and DynamoDB.
+
+## 🏗️ Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         AWS Cloud                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐  │
+│  │  CloudFront │◄───│      S3     │    │    DynamoDB        │  │
+│  │   (CDN)     │    │  (Frontend) │    │  (User Data, Txs)  │  │
+│  └──────┬──────┘    └──────┬──────┘    └──────────┬──────────┘  │
+│         │                   │                          │              │
+│         └──────────────────┼──────────────────────────┘              │
+│                            ▼                                       │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │                     API Gateway                               │  │
+│  │              (TRPC + Lambda Functions)                       │  │
+│  └─────────────────────────┬───────────────────────────────────┘  │
+│                            ▼                                       │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │                     Cognito User Pool                         │  │
+│  │              (Authentication & Authorization)                  │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 📁 Project Structure
+
+```
+agentictrade/
+├── src/
+│   ├── api/           # Backend API (TRPC + Lambda)
+│   ├── cdk/           # AWS Infrastructure as Code
+│   └── frontend/       # React Frontend Application
+├── .github/           # GitHub Actions CI/CD
+└── README.md          # This file
+```
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Node.js 18+ 
+- npm or yarn
+- AWS CLI configured (for CDK deployments)
+- Docker (optional, for local testing)
+
+### Installation
+
+```bash
+# Install root dependencies
+npm install
+
+# Install API dependencies
+cd src/api && npm install
+
+# Install CDK dependencies
+cd ../cdk && npm install
+
+# Install Frontend dependencies
+cd ../frontend && npm install
+```
+
+### Development
+
+```bash
+# Start frontend development server
+cd src/frontend && npm run dev
+
+# Run API tests
+cd src/api && npm test
+
+# Deploy to AWS (requires AWS credentials)
+cd ../cdk && npm run deploy
+```
+
+## 📦 Key Features
+
+### 1. Dashboard
+- Monthly spending overview with category breakdown
+- Cashflow analysis (income vs expenses)
+- Net worth tracking
+- Recent transactions list
+
+### 2. Transactions
+- View all transactions with filtering
+- **Calendar View** - Visual calendar showing daily spending
+- **Click & Drag** - Select date ranges to see category breakdown
+- Automatic category assignment
+- Manual category editing
+- Plaid integration for bank sync
+
+### 3. Categories
+- Custom user-defined categories
+- Category colors and icons
+- Transaction count and totals
+- Category analytics
+- **Toggle ignored categories** - Show/hide ignored transactions
+
+### 4. Budgets
+- Monthly budget planning
+- Category-specific budgets
+- Spending progress tracking
+- **Active/Completed tabs** - Separate current and past months
+- **Year grouping** - View budgets organized by year
+
+### 5. Investments
+- Portfolio tracking
+- Investment performance metrics
+- Historical data visualization
+
+### 6. Planner
+- Savings goals management
+- Milestone tracking
+- Expense planning
+- **Active/Completed tabs** - Separate current and past goals
+
+### 7. Theme Settings
+- Dark/Light mode (persisted to localStorage)
+- Customizable accent color (persisted)
+- Consistent theme across all pages
+
+## 🔐 Authentication
+
+Agentictrade uses **AWS Cognito** for authentication:
+
+- Sign up / Sign in flows
+- Email verification
+- Password reset
+- Session management
+- Protected routes
+
+## 🗄️ Database Schema
+
+### DynamoDB Tables
+
+#### Users Table
+```
+PK: USER#{userId}
+SK: METADATA | PROFILE | SETTINGS
+
+Attributes:
+- userId, email, firstName, lastName
+- createdAt, updatedAt
+- preferences (JSON)
+```
+
+#### Transactions Table
+```
+PK: USER#{userId}
+SK: TRANSACTION#{transactionId} | TRANSACTION#{date}#
+
+Attributes:
+- transactionId, accountId, amount, currency
+- merchantName, name, date
+- category (assigned category ID)
+- pending, type
+```
+
+#### Categories Table
+```
+PK: USER#{userId}
+SK: CATEGORY#{categoryId}
+
+Attributes:
+- categoryId, name, color, description
+- transactionCount, totalAmount, avgAmount
+- isDefault, createdAt
+```
+
+#### Budgets Table
+```
+PK: USER#{userId}
+SK: BUDGET#{budgetId}
+
+Attributes:
+- budgetId, name, budgetType (category/total)
+- categoryId, amount, spent, remaining
+- month, year, period (monthly/yearly)
+- isAutoGenerated, createdAt, updatedAt
+```
+
+#### Plans Table
+```
+PK: USER#{userId}
+SK: PLAN#{planId}
+
+Attributes:
+- planId, title, description, planType
+- targetAmount, currentAmount, targetDate
+- monthlyIncome, monthlySavingsGoal
+- milestones (array), expenses (array)
+```
+
+#### Investments Table
+```
+PK: USER#{userId}
+SK: INVESTMENT#{investmentId}
+
+Attributes:
+- investmentId, symbol, name, type
+- shares, averageCost, currentPrice
+- purchaseDate, accountType
+```
+
+## 🛠️ Technology Stack
+
+### Frontend
+- **React 18** - UI framework
+- **TypeScript** - Type safety
+- **Vite** - Build tool
+- **Tailwind CSS** - Styling
+- **TRPC** - Type-safe API calls
+- **React Router** - Navigation
+- **Lucide React** - Icons
+
+### Backend
+- **Node.js** - Runtime
+- **TypeScript** - Language
+- **TRPC** - API framework
+- **DynamoDB** - Database
+- **AWS Lambda** - Compute
+- **AWS Cognito** - Authentication
+- **Jest** - Testing
+
+### Infrastructure
+- **AWS CDK** - Infrastructure as Code
+- **AWS Lambda** - Serverless functions
+- **API Gateway** - REST endpoints
+- **DynamoDB** - NoSQL database
+- **S3** - Static hosting
+- **CloudFront** - CDN
+- **Cognito** - Auth service
+
+## 📝 API Documentation
+
+### TRPC Routers
+
+#### authRouter
+- `getCurrentUser` - Get authenticated user
+- `signUp` - Create new account
+- `signIn` - User login
+- `signOut` - User logout
+- `confirmSignUp` - Verify email
+- `resendConfirmationCode` - Resend verification
+
+#### transactionsRouter
+- `getTransactions` - List user transactions
+- `createTransaction` - Add transaction
+- `updateTransaction` - Modify transaction
+- `deleteTransaction` - Remove transaction
+- `searchTransactions` - Search by merchant/amount
+
+#### categoriesRouter
+- `getCategories` - List user categories
+- `createCategory` - Add new category
+- `updateCategory` - Modify category
+- `deleteCategory` - Remove category
+- `assignCategory` - Assign category to transaction
+
+#### budgetsRouter
+- `getBudgets` - List user budgets
+- `createBudget` - Create new budget
+- `updateBudget` - Modify budget
+- `deleteBudget` - Remove budget
+- `refreshBudgetSpending` - Recalculate spending
+
+#### dashboardRouter
+- `getDashboard` - Dashboard data
+- `getCashflow` - Income/expense analysis
+- `getNetWorth` - Net worth over time
+
+#### investmentsRouter
+- `getInvestments` - List investments
+- `createInvestment` - Add investment
+- `updateInvestment` - Modify investment
+- `deleteInvestment` - Remove investment
+
+#### plannerRouter
+- `getPlans` - List savings plans
+- `createPlan` - Create savings goal
+- `updatePlan` - Modify plan
+- `deletePlan` - Remove plan
+- `addMilestone` - Add milestone
+- `addExpense` - Add planned expense
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run with coverage
+npm test -- --coverage
+
+# Run specific test file
+npm test -- categories.test.ts
+```
+
+## 🚀 Deployment
+
+### Prerequisites
+1. AWS account with CDK bootstrapped
+2. Configured AWS credentials
+3. Domain name (optional, for custom domain)
+
+### Deployment Steps
+
+```bash
+# 1. Bootstrap CDK (first time only)
+cd src/cdk
+npm run bootstrap
+
+# 2. Deploy all stacks
+npm run deploy
+
+# 3. Deploy frontend
+cd ../frontend
+npm run build
+npm run deploy
+```
+
+## 📁 Key Files
+
+```
+src/
+├── api/
+│   ├── src/
+│   │   ├── routers/         # TRPC routers
+│   │   │   ├── auth.ts
+│   │   │   ├── transactions.ts
+│   │   │   ├── categories.ts
+│   │   │   ├── budgets.ts
+│   │   │   └── ...
+│   │   ├── handler.ts        # Lambda handler
+│   │   └── process.ts       # Environment config
+│   └── __tests__/          # API tests
+│
+├── cdk/
+│   ├── lib/
+│   │   ├── api-stack.ts     # API Gateway + Lambda
+│   │   ├── cognito-stack.ts # Authentication
+│   │   ├── dynamo-stack.ts  # Database tables
+│   │   └── web-stack.ts     # S3 + CloudFront
+│   └── bin/
+│       └── app.ts           # CDK app entry
+│
+└── frontend/
+    ├── src/
+    │   ├── pages/           # Route components
+    │   │   ├── Dashboard.tsx
+    │   │   ├── Transactions.tsx
+    │   │   ├── Categories.tsx
+    │   │   └── ...
+    │   ├── components/     # Reusable components
+    │   ├── services/       # API client
+    │   └── App.tsx         # Root component
+    └── ...
+```
+
+## 🤝 Contributing
+
+1. Create feature branch from `main`
+2. Make changes with tests
+3. Run `npm test` to verify
+4. Create pull request
+5. Review and merge
+
+## 📄 License
+
+MIT License - see LICENSE file for details.

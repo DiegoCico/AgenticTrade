@@ -1,0 +1,169 @@
+import * as path from "path";
+import * as cdk from "aws-cdk-lib";
+import * as iam from "aws-cdk-lib/aws-iam";
+import { Construct } from "constructs";
+
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import { NodejsFunction, OutputFormat } from "aws-cdk-lib/aws-lambda-nodejs";
+
+import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
+import * as apigwIntegrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
+
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as cognito from "aws-cdk-lib/aws-cognito";
+import * as logs from "aws-cdk-lib/aws-logs";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+
+export interface ApiStackProps extends cdk.StackProps {
+  stage: {
+    name: string;                    // prod | beta | dev
+    nodeEnv: string;
+    lambda: { memorySize: number; timeout: cdk.Duration };
+    cors: {
+      allowCredentials: boolean;
+      allowHeaders: string[];
+      allowMethods: apigwv2.CorsHttpMethod[];
+      allowOrigins: string[];
+      maxAge?: cdk.Duration;
+    };
+  };
+  ddbTable: dynamodb.Table;
+  userPool?: cognito.UserPool;
+  userPoolClient?: cognito.UserPoolClient;
+  serviceName?: string;
+  sesEmail: string;
+  plaidSecret: secretsmanager.Secret;
+}
+
+export class ApiStack extends cdk.Stack {
+  public readonly httpApi: apigwv2.HttpApi;
+  public readonly apiFn: lambda.Function;
+
+  constructor(scope: Construct, id: string, props: ApiStackProps) {
+    super(scope, id, props);
+
+    const stage = props.stage;
+    const serviceName = props.serviceName ?? "agentictrade-api";
+
+    // Use the external Plaid secret passed from app.ts
+    const plaidSecret = props.plaidSecret;
+
+    // ===== Lambda (tRPC Handler) =====
+    this.apiFn = new NodejsFunction(this, "TrpcLambda", {
+      functionName: `${serviceName}-${stage.name}-trpc`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.resolve(__dirname, "../../api/src/handler.ts"),
+      handler: "handler",
+      memorySize: stage.lambda.memorySize,
+      timeout: stage.lambda.timeout,
+
+      bundling: {
+        target: "node20",
+        format: OutputFormat.CJS,
+        minify: true,
+        sourceMap: true,
+        externalModules: ["aws-sdk"],        // only dependency needed
+      },
+
+      environment: {
+        NODE_OPTIONS: "--enable-source-maps",
+        NODE_ENV: stage.nodeEnv,
+        STAGE: stage.name,
+        SERVICE_NAME: serviceName,
+        TABLE_NAME: props.ddbTable.tableName,
+        APP_REGION: this.region,
+        DYNAMODB_TABLE_NAME: props.ddbTable.tableName,
+        COGNITO_USER_POOL_ID: props.userPool?.userPoolId || '',
+        COGNITO_CLIENT_ID: props.userPoolClient?.userPoolClientId || '',
+        
+        // Plaid Secrets Manager ARN
+        PLAID_SECRET_ARN: plaidSecret.secretArn,
+
+        SES_FROM_EMAIL: props.sesEmail,
+      },
+
+      // ===== 2-Week Log Retention =====
+      logRetention: logs.RetentionDays.TWO_WEEKS,
+    });
+
+    // ===== DDB Permissions =====
+    props.ddbTable.grantReadWriteData(this.apiFn);
+
+    // ===== Secrets Manager Permissions =====
+    plaidSecret.grantRead(this.apiFn);
+
+    // ===== API Gateway (HTTP API v2) =====
+    this.httpApi = new apigwv2.HttpApi(this, "HttpApi", {
+      apiName: `${serviceName}-${stage.name}`,
+      corsPreflight: {
+        allowOrigins: stage.cors.allowOrigins,
+        allowHeaders: stage.cors.allowHeaders,
+        allowMethods: stage.cors.allowMethods,
+        allowCredentials: stage.cors.allowCredentials,
+        maxAge: stage.cors.maxAge,
+      },
+    });
+
+    const lambdaIntegration = new apigwIntegrations.HttpLambdaIntegration(
+      "LambdaIntegration",
+      this.apiFn
+    );
+
+    // =====SES Permissions =====
+    this.apiFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "ses:SendEmail",
+          "ses:SendRawEmail",
+        ],
+        resources: ["*"],
+      })
+    );
+
+
+    // ===== Routes =====
+
+    // /trpc/*
+    new apigwv2.HttpRoute(this, "TrpcProxy", {
+      httpApi: this.httpApi,
+      routeKey: apigwv2.HttpRouteKey.with(
+        "/trpc/{proxy+}",
+        apigwv2.HttpMethod.ANY
+      ),
+      integration: lambdaIntegration,
+    });
+
+    // /health
+    new apigwv2.HttpRoute(this, "HealthRoute", {
+      httpApi: this.httpApi,
+      routeKey: apigwv2.HttpRouteKey.with(
+        "/health",
+        apigwv2.HttpMethod.GET
+      ),
+      integration: lambdaIntegration,
+    });
+
+    // /hello (optional but useful)
+    new apigwv2.HttpRoute(this, "HelloRoute", {
+      httpApi: this.httpApi,
+      routeKey: apigwv2.HttpRouteKey.with(
+        "/hello",
+        apigwv2.HttpMethod.GET
+      ),
+      integration: lambdaIntegration,
+    });
+
+    // ===== Outputs =====
+    new cdk.CfnOutput(this, "HttpApiInvokeUrl", {
+      value: `https://${this.httpApi.apiId}.execute-api.${this.region}.amazonaws.com`,
+    });
+
+    new cdk.CfnOutput(this, "FunctionName", {
+      value: this.apiFn.functionName,
+    });
+
+    new cdk.CfnOutput(this, "TableName", {
+      value: props.ddbTable.tableName,
+    });
+  }
+}
