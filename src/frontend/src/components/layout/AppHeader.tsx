@@ -1,4 +1,4 @@
-import { Moon, Search, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import type { Theme } from "../../types/portfolio";
 
 type AppHeaderProps = {
@@ -30,15 +30,13 @@ export function AppHeader({ accountMode, activeTab, theme, onSelectTab, onToggle
           </button>
         ))}
       </nav>
-      <label className="search">
-        <Search size={18} />
-        <input aria-label="Search symbols" placeholder="Search symbols" />
-      </label>
-      <span className="account-pill">{accountMode}</span>
-      <button className="icon-button" type="button" onClick={onToggleTheme}>
-        {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-        <span className="sr-only">Toggle theme</span>
-      </button>
+      <div className="header-actions">
+        <span className="account-pill">{accountMode}</span>
+        <button className="icon-button" type="button" onClick={onToggleTheme}>
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          <span className="sr-only">Toggle theme</span>
+        </button>
+      </div>
     </header>
   );
 }
