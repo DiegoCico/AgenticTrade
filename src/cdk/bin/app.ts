@@ -104,9 +104,11 @@ const apiDomainName = cdk.Fn.select(
   cdk.Fn.split("/", apiEndpoint)
 );
 
+const domainName = "agentictrade.online";
+
 const dns = new DnsStack(app, `AgentictradeDns-${cfg.name}`, {
   env: { account, region: "us-east-1" },
-  domainName: "agentictrade.name",
+  domainName,
 });
 
 const web = new WebStack(app, `AgentictradeWeb-${cfg.name}`, {
@@ -117,7 +119,7 @@ const web = new WebStack(app, `AgentictradeWeb-${cfg.name}`, {
   apiDomainName,
   apiPaths: ["/trpc/*", "/health", "/hello"],
 
-  domainName: "agentictrade.online",
+  domainName,
   hostedZone: dns.zone,
   certificate: dns.webCert,
 });

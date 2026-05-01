@@ -13,7 +13,7 @@
     "cdk:bootstrap": "npx cdk bootstrap",
     "cdk:synth": "npx cdk synth",
     "cdk:diff": "npx cdk diff",
-    "cdk:deploy:dev": "npm run build && npx cdk deploy --require-approval --all never -c stage=dev",
+    "cdk:deploy:dev": "npm run build && npx cdk deploy --all --require-approval never -c stage=dev",
     "cdk:deploy:beta": "npm run build && npx cdk deploy --require-approval never -c stage=beta",
     "cdk:deploy:prod": "npm run build && ALLOW_PROD_DEPLOY=true npx cdk deploy --require-approval never -c stage=prod",
     "cdk:destroy": "npx cdk destroy --force",
