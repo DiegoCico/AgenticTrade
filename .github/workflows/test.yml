@@ -19,6 +19,7 @@ jobs:
         with:
           node-version: '20.x'
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Clean npm auth and configs
         run: |
@@ -27,14 +28,13 @@ jobs:
           npm config delete always-auth || true
           npm config delete //registry.npmjs.org/:_authToken || true
 
-      - name: Clean lockfiles & node_modules (monorepo)
+      - name: Clean node_modules
         run: |
-          rm -rf node_modules package-lock.json
+          rm -rf node_modules
           find ./src -maxdepth 2 -type d -name node_modules -prune -exec rm -rf {} +
-          find ./src -maxdepth 2 -type f -name package-lock.json -delete
 
       - name: Install dependencies
-        run: npm install --workspaces
+        run: npm ci
 
       - name: Build the project
         run: npm run build
