@@ -14,30 +14,24 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Use Node.js 20.x
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           cache: 'npm'
-          cache-dependency-path: package-lock.json
 
-      - name: Clean npm auth and configs
+      - name: Clean npm config
         run: |
           rm -f ~/.npmrc
           npm config delete registry || true
           npm config delete always-auth || true
           npm config delete //registry.npmjs.org/:_authToken || true
 
-      - name: Clean node_modules
-        run: |
-          rm -rf node_modules
-          find ./src -maxdepth 2 -type d -name node_modules -prune -exec rm -rf {} +
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Build the project
-        run: npm run build
+      - name: Build
+        run: npm run build --if-present
 
-      - name: Run tests
-        run: npm run test
+      - name: Test
+        run: npm test --if-present
