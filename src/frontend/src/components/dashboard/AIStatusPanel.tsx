@@ -8,6 +8,8 @@ type AIStatusPanelProps = {
 };
 
 export function AIStatusPanel({ data }: AIStatusPanelProps) {
+  const hasPositions = data.positions.length > 0;
+
   return (
     <motion.aside
       animate={{ opacity: 1, y: 0 }}
@@ -35,7 +37,7 @@ export function AIStatusPanel({ data }: AIStatusPanelProps) {
         </div>
         <div>
           <span>Risk score</span>
-          <strong>{data.portfolio.riskScore}/100</strong>
+          <strong>{hasPositions ? `${data.portfolio.riskScore}/100` : "--"}</strong>
         </div>
         <div>
           <span>Cash</span>

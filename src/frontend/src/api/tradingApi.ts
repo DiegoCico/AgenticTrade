@@ -210,7 +210,7 @@ function mapPlan(plan: BackendTradePlan, positions: BackendPosition[]): TradePla
   };
 }
 
-function mapPortfolioData(state: BackendTradingState): PortfolioData {
+export function mapPortfolioData(state: BackendTradingState): PortfolioData {
   const positions = state.portfolio.positions.map((position) => mapPosition(position, state.decisions));
   const plans = state.tradePlans.map((plan) => mapPlan(plan, state.portfolio.positions));
 
@@ -226,7 +226,10 @@ function mapPortfolioData(state: BackendTradingState): PortfolioData {
     portfolio: {
       ...emptyPortfolioData.portfolio,
       totalValue: state.portfolio.totalValue,
-      riskScore: Math.round(Math.min(100, state.portfolio.maxTradeValuePercent * 10)),
+      riskScore:
+        positions.length > 0
+          ? Math.round(Math.min(100, positions.reduce((total, position) => total + position.allocation, 0)))
+          : 0,
     },
     positions,
     plans,
