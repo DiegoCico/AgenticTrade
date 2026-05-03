@@ -115,13 +115,32 @@ Responsive behavior:
 - Tablet/mobile: tabs move to a full-width second row.
 - Small mobile: tabs scroll horizontally and compact cards replace wide table layouts.
 
-## API Integration Plan
+## API Integration
 
-The current UI reads from `portfolio.json`. The next step is to replace that fixture with tRPC calls to:
+The UI loads dashboard data from the backend through `src/api/tradingApi.ts`.
+
+It calls:
 
 - `aiTrading.getState`
-- `aiTrading.getPortfolio`
-- `aiTrading.getPositions`
-- `aiTrading.getTradePlans`
-- `aiTrading.getDecisions`
-- `aiTrading.evaluate`
+- `aiTrading.getTradeHistory`
+
+Local development defaults to:
+
+```txt
+http://localhost:3001
+```
+
+Override the backend URL with:
+
+```txt
+VITE_API_URL=https://your-api-host
+```
+
+If the backend returns no history, the UI renders empty lists. It does not fall back to fixture trades.
+
+Debug logs are intentionally verbose in the browser console:
+
+- request procedure/input/url
+- raw tRPC responses
+- mapped frontend portfolio data
+- render counts for positions, plans, and trades

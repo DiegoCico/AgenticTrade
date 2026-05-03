@@ -15,6 +15,7 @@
     "sync-bank-data:dry-run": "tsx src/scripts/syncBankData.ts --dry-run"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.943.0",
     "@aws-sdk/client-lambda": "^3.932.0",
     "@aws-sdk/client-s3": "^3.911.0",
     "@aws-sdk/client-secrets-manager": "^3.952.0",

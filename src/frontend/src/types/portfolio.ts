@@ -31,6 +31,50 @@ export type TradeDecision = {
   reason: string;
 };
 
+export type TradeHistoryAction = "buy" | "sell" | "trim" | "hold" | "plan_buy" | "plan_sell" | "watch";
+
+export type TradeHistoryStatus = "planned" | "blocked" | "executed" | "canceled" | "failed" | "held" | "watched";
+
+export type TradeHistoryItem = {
+  id: string;
+  accountId: string;
+  symbol: string;
+  action: TradeHistoryAction;
+  side?: "buy" | "sell";
+  status: TradeHistoryStatus;
+  quantity: number;
+  price?: number;
+  triggerPrice?: number;
+  grossValue?: number;
+  netValue?: number;
+  stopLossPrice?: number;
+  takeProfitPrice?: number;
+  occurredAt: string;
+  aiThought: {
+    summary: string;
+    reason: string;
+    riskNotes: string;
+    confidence: number;
+    model: string;
+    promptVersion: string;
+  };
+  riskReview: {
+    approved: boolean;
+    finalAction: TradeHistoryAction;
+    reasons: string[];
+  };
+  marketContext?: {
+    snapshotId: string;
+    summary: string;
+    themes: string[];
+  };
+};
+
+export type TradeHistoryResponse = {
+  items: TradeHistoryItem[];
+  nextCursor?: string;
+};
+
 export type WatchlistItem = {
   symbol: string;
   price: number;

@@ -128,3 +128,45 @@ export type PipelineResult = {
   tradePlans: TradePlan[];
   executedTrades: ExecutedTrade[];
 };
+
+export type TradeHistoryStatus = 'planned' | 'blocked' | 'executed' | 'canceled' | 'failed' | 'held' | 'watched';
+
+export type TradeHistoryItem = {
+  id: string;
+  accountId: string;
+  symbol: string;
+  action: TradeAction;
+  side?: 'buy' | 'sell';
+  status: TradeHistoryStatus;
+  quantity: number;
+  price?: number;
+  triggerPrice?: number;
+  grossValue?: number;
+  netValue?: number;
+  stopLossPrice?: number;
+  takeProfitPrice?: number;
+  occurredAt: string;
+  aiThought: {
+    summary: string;
+    reason: string;
+    riskNotes: string;
+    confidence: number;
+    model: string;
+    promptVersion: string;
+  };
+  riskReview: {
+    approved: boolean;
+    finalAction: TradeAction;
+    reasons: string[];
+  };
+  marketContext?: {
+    snapshotId: string;
+    summary: string;
+    themes: string[];
+  };
+};
+
+export type TradeHistoryResult = {
+  items: TradeHistoryItem[];
+  nextCursor?: string;
+};

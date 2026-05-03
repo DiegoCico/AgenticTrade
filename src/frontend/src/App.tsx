@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { loadTradingDashboard, emptyPortfolioData } from "./api/tradingApi";
 import { AppHeader } from "./components/layout/AppHeader";
-import portfolioData from "./data/portfolio.json";
 import { PortfolioDashboard } from "./pages/PortfolioDashboard";
 import { TradePlans } from "./components/dashboard/TradePlans";
 import { RecentDecisions } from "./components/dashboard/RecentDecisions";
@@ -8,11 +8,53 @@ import { CurrentPositions } from "./components/dashboard/CurrentPositions";
 import type { PortfolioData, Theme } from "./types/portfolio";
 import "./App.css";
 
-const data = portfolioData as PortfolioData;
-
 export default function App() {
   const [activeTab, setActiveTab] = useState("portfolio");
+  const [data, setData] = useState<PortfolioData>(emptyPortfolioData);
+  const [isLoading, setIsLoading] = useState(true);
   const [theme, setTheme] = useState<Theme>("dark");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadData() {
+      console.log("[frontend:App] starting backend data load");
+      setIsLoading(true);
+
+      try {
+        const nextData = await loadTradingDashboard();
+        console.log("[frontend:App] backend data loaded", nextData);
+
+        if (!cancelled) {
+          setData(nextData);
+        }
+      } catch (error) {
+        console.error("[frontend:App] backend data load failed; rendering empty state", error);
+
+        if (!cancelled) {
+          setData(emptyPortfolioData);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  console.log("[frontend:App] render", {
+    activeTab,
+    isLoading,
+    positions: data.positions.length,
+    plans: data.plans.length,
+    trades: data.trades.length,
+  });
 
   return (
     <main className="app-shell" data-theme={theme}>
@@ -23,6 +65,7 @@ export default function App() {
         onSelectTab={setActiveTab}
         onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
       />
+      {isLoading && <div className="loading-strip">Loading backend data...</div>}
       {activeTab === "portfolio" && <PortfolioDashboard data={data} />}
       {activeTab === "positions" && (
         <section className="catalog-page">

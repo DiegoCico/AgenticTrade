@@ -34,6 +34,7 @@ src/api/
     server.ts             local Express entry
     process.ts            environment and Secrets Manager config
   TRADING_PIPELINE.md     detailed pipeline explanation
+  AI_PROMPTS_AND_FLOW.md  current LLM prompt and AI decision flow
 ```
 
 ## tRPC API
@@ -49,6 +50,7 @@ Procedures:
 | `aiTrading.getPositions` | query | Returns current positions |
 | `aiTrading.getTradePlans` | query | Returns planned/blocked trade plans |
 | `aiTrading.getDecisions` | query | Returns decision log entries |
+| `aiTrading.getTradeHistory` | query | Returns a frontend-ready timeline of executed trades, plans, holds, and AI thoughts |
 | `aiTrading.evaluate` | mutation | Runs the trading pipeline for requested symbols or all current holdings |
 
 Example `evaluate` input:
@@ -77,7 +79,8 @@ getMarketSnapshot()
 
 Current behavior:
 
-- Uses demo candles and demo portfolio data.
+- Loads Alpaca account, positions, and market bars when credentials are configured.
+- Falls back to demo candles and demo portfolio data when Alpaca is unavailable.
 - Adds an LLM-ready market-context pass before final decisions.
 - Uses a deterministic mock AI policy engine.
 - Includes stop-loss and take-profit prices when the AI decision calls for them.
@@ -85,6 +88,8 @@ Current behavior:
 - Logs every recommendation with prompt version, model name, input snapshot, AI output, and risk review.
 
 Read `TRADING_PIPELINE.md` for the deeper design notes and the expected Alpaca integration path.
+
+Read `AI_PROMPTS_AND_FLOW.md` for the current LLM prompt, fallback behavior, deterministic trade-decision rules, and the future path for replacing the mock decision engine with an LLM decision prompt.
 
 ## Scheduled Evaluation
 
@@ -95,6 +100,37 @@ Monday-Friday at 10:00 AM America/New_York
 ```
 
 That is 30 minutes after the regular U.S. market open. Manual evaluations through `aiTrading.evaluate` and scheduled evaluations use the same pipeline code.
+
+## DynamoDB Persistence
+
+Trading evaluations now persist portfolio snapshots, market snapshots, AI decisions, trade plans, executed trades, and trade-history timeline items to the DynamoDB table from `DYNAMODB_TABLE_NAME`.
+
+`aiTrading.getTradeHistory` returns records shaped for the frontend:
+
+```ts
+{
+  items: [
+    {
+      id: string,
+      symbol: string,
+      action: "buy" | "sell" | "trim" | "hold" | "plan_buy" | "plan_sell" | "watch",
+      status: "planned" | "blocked" | "executed" | "canceled" | "failed" | "held" | "watched",
+      occurredAt: string,
+      aiThought: {
+        summary: string,
+        reason: string,
+        riskNotes: string,
+        confidence: number,
+        model: string,
+        promptVersion: string
+      }
+    }
+  ],
+  nextCursor?: string
+}
+```
+
+The route accepts optional `accountId`, `symbol`, `from`, `to`, `limit`, and `cursor` fields.
 
 ## Environment
 

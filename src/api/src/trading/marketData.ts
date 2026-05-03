@@ -1,11 +1,20 @@
-import { demoMarketSnapshot } from './demoData';
+import { getAlpacaMarketSnapshot, getDemoMarketSnapshot } from './alpacaClient';
 import type { MarketSnapshot } from './types';
 
 export async function getMarketSnapshot(symbols: string[]): Promise<MarketSnapshot> {
-  const requested = new Set(symbols.map((symbol) => symbol.toUpperCase()));
+  console.log('[marketData] getMarketSnapshot input', {
+    symbols,
+  });
 
-  return {
-    ...demoMarketSnapshot,
-    candles: demoMarketSnapshot.candles.filter((candle) => requested.has(candle.symbol)),
-  };
+  const alpacaSnapshot = await getAlpacaMarketSnapshot(symbols);
+  if (alpacaSnapshot) return alpacaSnapshot;
+
+  const demoSnapshot = getDemoMarketSnapshot(symbols);
+  console.log('[marketData] using demo market snapshot', {
+    snapshotId: demoSnapshot.snapshotId,
+    symbols,
+    candles: demoSnapshot.candles.length,
+  });
+
+  return demoSnapshot;
 }

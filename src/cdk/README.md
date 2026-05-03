@@ -32,7 +32,12 @@ src/cdk/
   package.json
   stage.ts
   tsconfig.json
+  DYNAMODB_TRADE_HISTORY.md
 ```
+
+## DynamoDB Data Model
+
+The table is intended for a single-table design covering portfolio snapshots, AI decisions, trade plans, executed trades, and symbol-level trade history. The stack defines `gsi1`, `gsi2`, and `gsi3`; the API currently uses `gsi1` for the account trade-history feed. Move additional read paths to `gsi2` and `gsi3` one at a time. See `DYNAMODB_TRADE_HISTORY.md` for the proposed access patterns, item shapes, indexes, and frontend DTO for displaying stock purchase history alongside AI thoughts.
 
 ## Alpaca Secret
 

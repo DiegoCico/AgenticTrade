@@ -510,6 +510,16 @@ h2 {
   max-width: 760px;
 }
 
+.loading-strip {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 auto 18px;
+  max-width: 1180px;
+  padding: 10px 14px;
+}
+
 .watchlist-panel {
   display: grid;
   gap: 10px;
