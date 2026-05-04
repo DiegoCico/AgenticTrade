@@ -29,11 +29,36 @@ export type TradeDecision = {
   quantity: number;
   price: number;
   reason: string;
+  status: TradeHistoryStatus;
+  confidence: number;
+  riskNotes: string;
+  riskApproved: boolean;
+  riskReasons: string[];
+  journal?: DecisionJournal;
 };
 
 export type TradeHistoryAction = "buy" | "sell" | "trim" | "hold" | "plan_buy" | "plan_sell" | "watch";
 
 export type TradeHistoryStatus = "planned" | "blocked" | "executed" | "canceled" | "failed" | "held" | "watched";
+
+export type DecisionJournal = {
+  strategyBucket: string;
+  signal: "bullish" | "bearish" | "neutral";
+  preLlmConfidence: number;
+  finalConfidence: number;
+  signalStrength: "strong" | "moderate" | "weak";
+  noTradeBias: string;
+  executionPlan: string;
+  llmInfluence: {
+    view: "constructive" | "cautious" | "neutral" | "missing";
+    opportunityScore: number;
+    riskScore: number;
+    confidenceScore: number;
+    confidenceAdjustment: number;
+    noTradeBiasApplied: boolean;
+  };
+  checkpoints: string[];
+};
 
 export type TradeHistoryItem = {
   id: string;
@@ -58,6 +83,7 @@ export type TradeHistoryItem = {
     model: string;
     promptVersion: string;
   };
+  journal?: DecisionJournal;
   riskReview: {
     approved: boolean;
     finalAction: TradeHistoryAction;

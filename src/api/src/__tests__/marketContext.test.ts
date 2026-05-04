@@ -17,7 +17,7 @@ describe('buildMarketContext', () => {
     expect(context.model).toBe('local-rules');
     expect(context.summary).toContain('Market snapshot contains');
     expect(context.themes).toContain('Risk controls should account for elevated intraday volatility.');
-    expect(context.perSymbol).toHaveLength(5);
+    expect(context.perSymbol).toHaveLength(12);
     expect(context.perSymbol.find((item) => item.symbol === 'NVDA')).toMatchObject({
       view: 'constructive',
     });

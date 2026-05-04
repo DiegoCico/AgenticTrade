@@ -9,6 +9,7 @@ import { createTradeOutcome } from './tradePlanner';
 import { persistPipelineRun } from './tradingRepository';
 import type { ExecutedTrade, PipelineResult, TradePlan } from './types';
 import { getAlpacaPortfolioState } from './alpacaClient';
+import { getDefaultStrategySymbols } from './strategy';
 
 export type RunTradingPipelineInput = {
   symbols?: string[];
@@ -29,7 +30,7 @@ export async function runTradingPipeline(input: RunTradingPipelineInput = {}): P
 
   const symbols = input.symbols?.length
     ? input.symbols.map((symbol) => symbol.toUpperCase())
-    : portfolio.positions.map((position) => position.symbol);
+    : getDefaultStrategySymbols(portfolio);
 
   console.log('[pipeline] resolved symbols', {
     symbols,

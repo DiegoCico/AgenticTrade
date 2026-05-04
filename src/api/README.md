@@ -51,7 +51,7 @@ Procedures:
 | `aiTrading.getTradePlans` | query | Returns planned/blocked trade plans |
 | `aiTrading.getDecisions` | query | Returns decision log entries |
 | `aiTrading.getTradeHistory` | query | Returns a frontend-ready timeline of executed trades, plans, holds, and AI thoughts |
-| `aiTrading.evaluate` | mutation | Runs the trading pipeline for requested symbols or all current holdings |
+| `aiTrading.evaluate` | mutation | Runs the trading pipeline for requested symbols or the AI-managed strategy universe |
 
 Example `evaluate` input:
 
@@ -61,7 +61,7 @@ Example `evaluate` input:
 }
 ```
 
-If `symbols` is omitted, the API evaluates all current holdings from the demo portfolio.
+If `symbols` is omitted, the API evaluates the AI-managed strategy universe plus current holdings. The strategy targets 30-40% ETFs, with the stock sleeve split evenly between safer and more aggressive candidates selected by the AI policy.
 
 ## Trading Pipeline
 
@@ -81,6 +81,7 @@ Current behavior:
 
 - Loads Alpaca account, positions, and market bars when credentials are configured.
 - Falls back to demo candles and demo portfolio data when Alpaca is unavailable.
+- Uses the default AI-managed universe when symbols are not supplied.
 - Adds an LLM-ready market-context pass before final decisions.
 - Uses a deterministic mock AI policy engine.
 - Includes stop-loss and take-profit prices when the AI decision calls for them.

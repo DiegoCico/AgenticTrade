@@ -56,7 +56,33 @@ export type MarketContext = {
     symbol: string;
     view: 'constructive' | 'cautious' | 'neutral';
     rationale: string;
+    scores: {
+      opportunity: number;
+      risk: number;
+      confidence: number;
+    };
   }>;
+};
+
+export type LlmInfluence = {
+  view: 'constructive' | 'cautious' | 'neutral' | 'missing';
+  opportunityScore: number;
+  riskScore: number;
+  confidenceScore: number;
+  confidenceAdjustment: number;
+  noTradeBiasApplied: boolean;
+};
+
+export type DecisionJournal = {
+  strategyBucket: string;
+  signal: TradingSignal['signal'];
+  preLlmConfidence: number;
+  finalConfidence: number;
+  signalStrength: 'strong' | 'moderate' | 'weak';
+  noTradeBias: string;
+  executionPlan: string;
+  llmInfluence: LlmInfluence;
+  checkpoints: string[];
 };
 
 export type AiDecision = {
@@ -69,6 +95,7 @@ export type AiDecision = {
   confidence: number;
   reason: string;
   riskNotes: string;
+  journal: DecisionJournal;
 };
 
 export type RiskReview = {
@@ -154,6 +181,7 @@ export type TradeHistoryItem = {
     model: string;
     promptVersion: string;
   };
+  journal?: DecisionJournal;
   riskReview: {
     approved: boolean;
     finalAction: TradeAction;

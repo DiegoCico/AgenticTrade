@@ -78,7 +78,7 @@ export default function App() {
         </section>
       )}
       {activeTab === "decisions" && (
-        <section className="catalog-page catalog-narrow">
+        <section className="catalog-page">
           <RecentDecisions buyingPower={data.account.buyingPower} trades={data.trades} />
         </section>
       )}

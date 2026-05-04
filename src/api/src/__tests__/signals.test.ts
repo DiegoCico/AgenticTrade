@@ -5,8 +5,21 @@ describe('calculateSignals', () => {
   it('calculates one signal per symbol in the market snapshot', () => {
     const signals = calculateSignals(demoPortfolio, demoMarketSnapshot);
 
-    expect(signals).toHaveLength(5);
-    expect(signals.map((signal) => signal.symbol).sort()).toEqual(['COIN', 'MSFT', 'NVDA', 'SPY', 'TSLA']);
+    expect(signals).toHaveLength(12);
+    expect(signals.map((signal) => signal.symbol).sort()).toEqual([
+      'AAPL',
+      'AMD',
+      'COIN',
+      'COST',
+      'JNJ',
+      'MSFT',
+      'NVDA',
+      'PLTR',
+      'QQQ',
+      'SPY',
+      'TSLA',
+      'VTI',
+    ]);
   });
 
   it('marks strong positive momentum and volume as bullish', () => {

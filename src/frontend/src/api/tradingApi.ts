@@ -272,6 +272,12 @@ export async function loadTradingDashboard() {
     quantity: item.quantity,
     price: item.price ?? item.triggerPrice ?? 0,
     reason: item.aiThought.reason,
+    status: item.status,
+    confidence: item.aiThought.confidence,
+    riskNotes: item.aiThought.riskNotes,
+    riskApproved: item.riskReview.approved,
+    riskReasons: item.riskReview.reasons,
+    journal: item.journal,
   }));
 
   console.log("[frontend:loadTradingDashboard] final frontend data", {

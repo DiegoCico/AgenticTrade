@@ -10,7 +10,7 @@ describe('getDemoMarketSnapshot', () => {
   });
 
   it('returns no candles for symbols outside the demo dataset', () => {
-    const snapshot = getDemoMarketSnapshot(['AAPL']);
+    const snapshot = getDemoMarketSnapshot(['XYZ']);
 
     expect(snapshot.candles).toEqual([]);
   });

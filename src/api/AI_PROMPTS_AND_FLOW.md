@@ -36,6 +36,16 @@ src/api/src/trading/alpacaClient.ts
 
 This loads candles for the requested symbols. The API first tries Alpaca market data when Alpaca credentials are configured. If Alpaca is unavailable, it falls back to demo market data.
 
+If the caller does not provide symbols, `pipeline.ts` now uses the AI-managed strategy universe from `STRATEGY_UNIVERSE.ts` plus any current holdings. That makes the normal flow AI-selected instead of user-selected.
+
+Current strategy targets:
+
+- ETFs: 35% target allocation, with a 30-40% intended range
+- Safer stocks: 32.5% target allocation
+- Aggressive stocks: 32.5% target allocation
+
+The current strategy universe lives in `src/api/src/trading/STRATEGY_UNIVERSE.ts` and is grouped into ETF, safer-stock, and aggressive-stock buckets.
+
 Alpaca market data request:
 
 ```txt
@@ -202,9 +212,13 @@ Analyze the supplied portfolio market data for an AI trading system.
 
 Return strict JSON with this shape:
 
-{"summary":"string","themes":["string"],"perSymbol":[{"symbol":"string","view":"constructive|cautious|neutral","rationale":"string"}]}
+{"summary":"string","themes":["string"],"perSymbol":[{"symbol":"string","view":"constructive|cautious|neutral","rationale":"string","scores":{"opportunity":0-100,"risk":0-100,"confidence":0-100}}]}
 
-Do not recommend order execution. Only summarize market context and symbol-level views.
+Do not recommend order execution. Only summarize market context and symbol-level views for the candidateSignals list.
+
+Scores mean: opportunity=quality of the long setup, risk=downside/volatility risk, confidence=confidence in your view.
+
+Token budget rule: the backend already screened the full universe into compact signals. Do not ask for raw candles.
 
 {JSON payload}
 ```
@@ -218,16 +232,63 @@ The JSON payload contains:
     buyingPower,
     totalValue,
     maxPositionPercent,
-    positions
+    positions: [
+      {
+        s,
+        shares,
+        cost,
+        px,
+        alloc,
+        bucket
+      }
+    ]
   },
   snapshot: {
     snapshotId,
     capturedAt,
-    candles
+    candleCount
   },
-  signals
+  universeSummary: {
+    evaluatedSymbols,
+    buckets: [
+      {
+        bucket,
+        symbols,
+        bullish,
+        bearish,
+        neutral,
+        elevatedVolatility
+      }
+    ]
+  },
+  screenedSignals: [
+    {
+      s,
+      bucket,
+      px,
+      mom,
+      vol,
+      vr,
+      alloc,
+      signal
+    }
+  ],
+  candidateSignals: [
+    {
+      s,
+      bucket,
+      px,
+      mom,
+      vol,
+      vr,
+      alloc,
+      signal
+    }
+  ]
 }
 ```
+
+`screenedSignals` contains the full evaluated universe in compact form. `candidateSignals` contains the highest-ranked bullish names, elevated-risk names, and current holdings that need closer LLM commentary. Raw candles are intentionally excluded from the prompt to keep token usage controlled.
 
 ## Expected LLM Output
 
@@ -241,7 +302,12 @@ The backend expects strict JSON:
     {
       "symbol": "NVDA",
       "view": "constructive",
-      "rationale": "string"
+      "rationale": "string",
+      "scores": {
+        "opportunity": 0,
+        "risk": 0,
+        "confidence": 0
+      }
     }
   ]
 }
@@ -268,6 +334,7 @@ It summarizes:
 - count of elevated-volatility symbols
 - buying power versus total portfolio value
 - one rationale per symbol
+- deterministic fallback scores per symbol
 
 This keeps scheduled trading and manual evaluation running even without an LLM.
 
@@ -312,21 +379,65 @@ Decision output shape:
   confidence: number;
   reason: string;
   riskNotes: string;
+  journal: {
+    strategyBucket: string;
+    signal: "bullish" | "bearish" | "neutral";
+    preLlmConfidence: number;
+    finalConfidence: number;
+    signalStrength: "strong" | "moderate" | "weak";
+    noTradeBias: string;
+    executionPlan: string;
+    llmInfluence: {
+      view: "constructive" | "cautious" | "neutral" | "missing";
+      opportunityScore: number;
+      riskScore: number;
+      confidenceScore: number;
+      confidenceAdjustment: number;
+      noTradeBiasApplied: boolean;
+    };
+    checkpoints: string[];
+  };
 }
 ```
 
 ## Current Decision Rules
 
+### No-Trade Bias
+
+The decision engine now defaults to `hold`. It only plans a buy or trim when all relevant gates pass.
+
+For a planned buy:
+
+- signal must be `bullish`
+- momentum must be at least `1.8%`
+- volume ratio must be at least `1.1`
+- volatility must be at or below `3.5%`
+- final confidence must be at least `75`
+- symbol must be selected by the strategy ranker
+- the strategy sleeve must still have allocation room
+- the position must not be near max allocation
+
+For a trim:
+
+- signal must be `bearish`
+- shares must already be owned
+- momentum must be at or below `-1.8%` or volatility must be at least `4%`
+- final confidence must be at least `72`
+
+If these gates do not pass, the output is a journaled `hold` decision explaining which checks failed.
+
 ### Bullish Signal
 
-If a symbol is bullish and the current allocation is not near the max allocation:
+If a symbol is bullish and clears the no-trade gate:
 
 - action: `plan_buy`
-- quantity: about 2.5% of portfolio value divided by current price
+- quantity: sized against the remaining ETF, safer-stock, or aggressive-stock sleeve target, capped by max trade size
 - trigger price: current price times `0.985`
 - stop loss: trigger price times `0.96`
 - take profit: trigger price times `1.08`
-- confidence: based on momentum, volume ratio, and market-context view
+- confidence: based on momentum, volume ratio, LLM scores, and market-context view
+
+The policy ranks bullish candidates inside each sleeve and only plans buys for selected candidates. If a sleeve is already at or above target, bullish candidates in that sleeve are held instead of bought.
 
 ### Bearish Signal
 
@@ -349,12 +460,15 @@ Otherwise:
 
 ## Market Context Influence
 
-The LLM market context affects final deterministic decisions through a small confidence adjustment:
+The LLM market context affects final deterministic decisions through a bounded confidence adjustment. The engine tracks both pre-LLM confidence and final confidence in each decision journal.
 
 ```txt
 constructive: +3
 cautious: -3
 neutral: 0
+opportunity score above/below 50: small positive/negative adjustment
+risk score above/below 50: small negative/positive adjustment
+total LLM confidence adjustment: clamped to -8 through +8
 ```
 
 The symbol rationale is also appended into the decision reason:
@@ -362,6 +476,10 @@ The symbol rationale is also appended into the decision reason:
 ```txt
 Market context: {symbol-level rationale}
 ```
+
+Each decision stores `journal.llmInfluence`, including the LLM view, opportunity score, risk score, confidence score, and confidence adjustment. This lets later performance analysis compare pre-LLM confidence against final LLM-influenced confidence.
+
+Persistence also writes a separate DynamoDB item with `entityType: "LLM_INFLUENCE"` for each decision. It stores symbol, action, risk-approved final action, pre-LLM confidence, final confidence, confidence delta, no-trade-bias status, and the structured LLM influence fields. This makes LLM influence performance easier to query without scanning full decision records.
 
 ## Risk Validation
 
@@ -404,6 +522,7 @@ After the AI and risk pipeline runs, `persistPipelineRun()` stores:
 - market snapshot
 - market candles
 - AI decisions
+- LLM influence records
 - trade plans
 - executed trades
 - trade history timeline items with AI thoughts
@@ -481,17 +600,18 @@ scheduled_runs = 0 on weekends
 
 The current market-context prompt sends:
 
-- portfolio settings
-- all current positions
-- market snapshot candles
-- computed trading signals
+- portfolio settings and compact current positions
+- market snapshot ID, capture time, and candle count
+- bucket-level universe summary
+- compact screened signals for the evaluated universe
+- ranked candidate signals for closer LLM commentary
 - a short instruction prompt
 
-For the demo portfolio with five symbols, a reasonable rough estimate is:
+Raw candle arrays are not sent to the LLM. The backend calculates signals from candles first, then sends the smaller signal payload. For the larger strategy universe, a reasonable rough estimate is:
 
 ```txt
-input_tokens_per_evaluation: 2,000 to 5,000
-output_tokens_per_evaluation: 300 to 800
+input_tokens_per_evaluation: 3,000 to 8,000
+output_tokens_per_evaluation: 500 to 1,200
 ```
 
 Using OpenAI `gpt-4.1-mini` standard text pricing:

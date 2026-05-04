@@ -155,6 +155,7 @@ function historyItemFromDecision(decision: DecisionLogEntry, accountId: string):
       model: decision.model,
       promptVersion: decision.promptVersion,
     },
+    journal: aiDecision.journal,
     riskReview,
     marketContext: {
       snapshotId: decision.snapshotId,
@@ -185,6 +186,7 @@ function historyItemFromPlan(plan: TradePlan, decision: DecisionLogEntry | undef
       model: decision?.model ?? 'unknown',
       promptVersion: decision?.promptVersion ?? 'unknown',
     },
+    journal: decision?.aiDecision.journal,
     riskReview: decision?.riskReview ?? {
       approved: plan.status === 'planned',
       finalAction: plan.side === 'buy' ? 'plan_buy' : 'plan_sell',
@@ -229,6 +231,7 @@ function historyItemFromTrade(
       model: decision?.model ?? 'unknown',
       promptVersion: decision?.promptVersion ?? 'unknown',
     },
+    journal: decision?.aiDecision.journal,
     riskReview: decision?.riskReview ?? {
       approved: true,
       finalAction: trade.action,
@@ -367,6 +370,31 @@ function buildPersistenceItems(input: PersistPipelineRunInput) {
 
     items.push(decisionItem);
 
+    items.push({
+      pk: accountPk(accountId),
+      sk: `LLM_INFLUENCE#${decision.createdAt}#${decision.id}`,
+      entityType: 'LLM_INFLUENCE',
+      schemaVersion: SCHEMA_VERSION,
+      accountId,
+      decisionId: decision.id,
+      snapshotId: decision.snapshotId,
+      symbol: decision.aiDecision.symbol,
+      action: decision.aiDecision.action,
+      finalAction: decision.riskReview.finalAction,
+      approved: decision.riskReview.approved,
+      preLlmConfidence: decision.aiDecision.journal.preLlmConfidence,
+      finalConfidence: decision.aiDecision.journal.finalConfidence,
+      confidenceDelta: decision.aiDecision.journal.finalConfidence - decision.aiDecision.journal.preLlmConfidence,
+      llmInfluence: decision.aiDecision.journal.llmInfluence,
+      noTradeBiasApplied: decision.aiDecision.journal.llmInfluence.noTradeBiasApplied,
+      signalStrength: decision.aiDecision.journal.signalStrength,
+      createdAt: decision.createdAt,
+      gsi1pk: typePk(accountId, 'LLM_INFLUENCE'),
+      gsi1sk: `${decision.createdAt}#${decision.id}`,
+      gsi2pk: symbolPk(decision.aiDecision.symbol, 'LLM_INFLUENCE'),
+      gsi2sk: `${decision.createdAt}#${accountId}#${decision.id}`,
+    });
+
     if (decision.aiDecision.action === 'hold' || decision.aiDecision.action === 'watch') {
       items.push(
         toHistoryRecord(historyItemFromDecision(decision, accountId), {
@@ -481,6 +509,7 @@ function toTradeHistoryItem(record: TradeHistoryRecord): TradeHistoryItem {
     takeProfitPrice: record.takeProfitPrice,
     occurredAt: record.occurredAt,
     aiThought: record.aiThought,
+    journal: record.journal,
     riskReview: record.riskReview,
     marketContext: record.marketContext,
   };

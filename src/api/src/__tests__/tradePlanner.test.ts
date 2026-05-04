@@ -14,6 +14,24 @@ function decision(overrides: Partial<AiDecision>): AiDecision {
     confidence: 78,
     reason: 'entry setup',
     riskNotes: 'risk is bounded',
+    journal: {
+      strategyBucket: 'safe_stock',
+      signal: 'bullish',
+      preLlmConfidence: 76,
+      finalConfidence: 78,
+      signalStrength: 'strong',
+      noTradeBias: 'Cleared.',
+      executionPlan: 'Test execution plan.',
+      llmInfluence: {
+        view: 'constructive',
+        opportunityScore: 70,
+        riskScore: 30,
+        confidenceScore: 75,
+        confidenceAdjustment: 2,
+        noTradeBiasApplied: false,
+      },
+      checkpoints: ['test checkpoint'],
+    },
     ...overrides,
   };
 }

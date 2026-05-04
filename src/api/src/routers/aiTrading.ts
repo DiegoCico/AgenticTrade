@@ -34,6 +34,7 @@ async function getInMemoryTradeHistory(): Promise<TradeHistoryResult> {
           model: decision?.model ?? 'unknown',
           promptVersion: decision?.promptVersion ?? 'unknown',
         },
+        journal: decision?.aiDecision.journal,
         riskReview: decision?.riskReview ?? {
           approved: true,
           finalAction: trade.action,
@@ -71,6 +72,7 @@ async function getInMemoryTradeHistory(): Promise<TradeHistoryResult> {
           model: decision?.model ?? 'unknown',
           promptVersion: decision?.promptVersion ?? 'unknown',
         },
+        journal: decision?.aiDecision.journal,
         riskReview: decision?.riskReview ?? {
           approved: plan.status === 'planned',
           finalAction: plan.side === 'buy' ? 'plan_buy' : 'plan_sell',
@@ -106,6 +108,7 @@ async function getInMemoryTradeHistory(): Promise<TradeHistoryResult> {
           model: entry.model,
           promptVersion: entry.promptVersion,
         },
+        journal: entry.aiDecision.journal,
         riskReview: entry.riskReview,
         marketContext: {
           snapshotId: entry.snapshotId,

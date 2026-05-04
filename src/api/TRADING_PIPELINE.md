@@ -4,19 +4,37 @@ This API uses a controlled trading pipeline instead of sending raw stocks direct
 
 ## Flow
 
-1. `marketData.ts` loads a market snapshot for the requested symbols.
-2. `signals.ts` converts raw candles into structured signals such as momentum, volatility, volume ratio, and current allocation.
-3. `marketContext.ts` gives the agentic AI a market-data review step. It can call an OpenAI-compatible LLM endpoint when configured, or fall back to deterministic market context.
-4. `aiDecisionEngine.ts` receives portfolio state, signals, and market context, then returns strict decision objects. Decisions can include entry/trigger prices, stop-loss prices, and take-profit prices. It is currently a deterministic mock policy engine, but this is where the full LLM decision call should be plugged in later.
-5. `riskValidator.ts` checks the AI decision against portfolio rules:
+1. `strategy.ts` resolves the AI-managed strategy universe when the caller does not provide symbols.
+2. `marketData.ts` loads a market snapshot for the resolved symbols.
+3. `signals.ts` converts raw candles into structured signals such as momentum, volatility, volume ratio, and current allocation.
+4. `marketContext.ts` gives the agentic AI a market-data review step. It can call an OpenAI-compatible LLM endpoint for structured symbol views and scores, or fall back to deterministic market context.
+5. `aiDecisionEngine.ts` receives portfolio state, signals, and market context, then returns strict decision objects. Decisions include a journal with no-trade gate results, LLM influence, pre/post confidence, entry/trigger prices, stop-loss prices, and take-profit prices. It is currently a deterministic mock policy engine, but this is where the full LLM decision call should be plugged in later.
+6. `riskValidator.ts` checks the AI decision against portfolio rules:
    - confidence must meet the minimum threshold
    - buys cannot exceed buying power
    - trade value cannot exceed max trade size
    - sells/trims cannot exceed owned shares
    - buys cannot exceed max position allocation
    - stop-loss and take-profit prices must be valid for the requested action
-6. `tradePlanner.ts` turns approved decisions into planned trades or executed trades, preserving any stop-loss and take-profit guardrails.
-7. `pipeline.ts` logs every decision with the prompt version, model name, input snapshot, market context, AI output, and risk review.
+7. `tradePlanner.ts` turns approved decisions into planned trades or executed trades, preserving any stop-loss and take-profit guardrails.
+8. `pipeline.ts` logs every decision with the prompt version, model name, input snapshot, market context, AI output, decision journal, LLM influence record, and risk review.
+
+## AI-Managed Strategy
+
+When `aiTrading.evaluate` is called without `symbols`, the AI-managed strategy evaluates a built-in universe instead of asking the user for tickers.
+
+Target allocation:
+
+- ETFs: target 35%, with a 30-40% intended range
+- Stocks: target 65%
+- Safer stock sleeve: target 32.5%
+- Aggressive stock sleeve: target 32.5%
+
+The current universe is defined in `src/api/src/trading/STRATEGY_UNIVERSE.ts`. It contains ETF, safer-stock, and aggressive-stock candidates used by the default AI-managed evaluation.
+
+The decision engine ranks bullish candidates by momentum, volume, and volatility, then chooses a limited number from each sleeve. Buy quantities are sized against the remaining sleeve target and still pass through the deterministic risk gate.
+
+The engine has a no-trade bias: it defaults to `hold` unless a symbol has a strong signal, high final confidence, allocation room, and valid risk controls. Every decision includes a journal explaining whether the no-trade bias was applied or cleared.
 
 ## Scheduled Evaluation
 
@@ -59,7 +77,7 @@ The CDK-created secret stores:
 }
 ```
 
-When enabled, the pipeline sends normalized market data, portfolio state, and computed signals to the LLM and expects strict JSON containing `summary`, `themes`, and `perSymbol` views. If the LLM is disabled, unconfigured, or fails, the pipeline uses deterministic fallback context so evaluation still runs.
+When enabled, the pipeline sends portfolio state, a bucket-level universe summary, compact screened signals, and ranked candidate signals to the LLM. It does not send raw candle arrays; candles are converted into signals first to keep token usage controlled. The LLM returns strict JSON containing `summary`, `themes`, and `perSymbol` views. If the LLM is disabled, unconfigured, or fails, the pipeline uses deterministic fallback context so evaluation still runs.
 
 ## Alpaca Integration
 
@@ -116,7 +134,7 @@ Example mutation input:
 }
 ```
 
-If `symbols` is omitted, the pipeline evaluates every current holding in the demo portfolio.
+If `symbols` is omitted, the pipeline evaluates the AI-managed strategy universe plus current holdings. Provide `symbols` only when you want to override the default strategy universe for a manual evaluation.
 
 ## Stop Loss And Take Profit
 
