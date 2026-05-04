@@ -145,10 +145,17 @@ export const aiTradingRouter = router({
     .query(async ({ input }) => {
       console.log('[aiTrading.getTradeHistory] input', input ?? {});
 
+      const resolvedInput = input?.accountId
+        ? input
+        : {
+            ...(input ?? {}),
+            accountId: (await getTradingState()).portfolio.accountId,
+          };
+
       try {
-        const result = await getTradeHistory(input);
+        const result = await getTradeHistory(resolvedInput);
         console.log('[aiTrading.getTradeHistory] DynamoDB result', {
-          input: input ?? {},
+          input: resolvedInput,
           items: result.items.length,
           nextCursor: result.nextCursor,
         });
@@ -157,11 +164,11 @@ export const aiTradingRouter = router({
       } catch (error) {
         console.warn('[aiTrading.getTradeHistory] Falling back to in-memory history', error);
         const fallback = await getInMemoryTradeHistory();
-        const symbol = input?.symbol?.toUpperCase();
+        const symbol = resolvedInput?.symbol?.toUpperCase();
         const items = symbol ? fallback.items.filter((item) => item.symbol === symbol) : fallback.items;
 
         console.log('[aiTrading.getTradeHistory] fallback result', {
-          input: input ?? {},
+          input: resolvedInput ?? {},
           items: items.length,
         });
 

@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getConfig } from '../process';
 import { demoMarketSnapshot, demoPortfolio } from './demoData';
-import type { MarketCandle, MarketSnapshot, PortfolioState, Position } from './types';
+import type { ExecutedTrade, MarketCandle, MarketSnapshot, PortfolioState, Position, TradePlan } from './types';
 
 type AlpacaAccount = {
   id?: string;
@@ -31,7 +31,24 @@ type AlpacaBarsResponse = {
   bars?: Record<string, AlpacaBar[]>;
 };
 
+type AlpacaOrder = {
+  id?: string;
+  client_order_id?: string;
+  symbol?: string;
+  qty?: string;
+  side?: string;
+  type?: string;
+  status?: string;
+  filled_avg_price?: string;
+  limit_price?: string;
+  submitted_at?: string;
+};
+
 type RuntimeConfig = Awaited<ReturnType<typeof getConfig>>;
+
+let lastAlpacaMarketDataFailure: string | undefined;
+const CANDLES_PER_SYMBOL = 12;
+const MAX_ALPACA_BARS_LIMIT = 10000;
 
 function hasAlpacaCredentials(config: RuntimeConfig) {
   return Boolean(config.ALPACA_API_KEY && config.ALPACA_SECRET_KEY);
@@ -50,7 +67,13 @@ function numberFromString(value: string | undefined, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-async function alpacaFetch<T>(config: RuntimeConfig, baseUrl: string, path: string, searchParams?: Record<string, string>) {
+async function alpacaFetch<T>(
+  config: RuntimeConfig,
+  baseUrl: string,
+  path: string,
+  searchParams?: Record<string, string>,
+  init?: RequestInit,
+) {
   const url = new URL(path, baseUrl);
   for (const [key, value] of Object.entries(searchParams ?? {})) {
     url.searchParams.set(key, value);
@@ -63,9 +86,14 @@ async function alpacaFetch<T>(config: RuntimeConfig, baseUrl: string, path: stri
     paper: config.ALPACA_PAPER,
   });
 
+  const { headers: initHeaders, ...restInit } = init ?? {};
   const response = await fetch(url, {
-      method: 'GET',
-    headers: alpacaHeaders(config),
+    method: 'GET',
+    ...restInit,
+    headers: {
+      ...alpacaHeaders(config),
+      ...initHeaders,
+    },
   });
 
   const text = await response.text();
@@ -81,6 +109,49 @@ async function alpacaFetch<T>(config: RuntimeConfig, baseUrl: string, path: stri
   }
 
   return JSON.parse(text) as T;
+}
+
+function priceString(value: number) {
+  return value.toFixed(value >= 1 ? 2 : 4);
+}
+
+function getInvalidSymbolFromAlpacaError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const match = message.match(/invalid symbol:\s*([A-Z0-9.:-]+)/i);
+
+  return match?.[1]?.toUpperCase();
+}
+
+async function getBarsWithInvalidSymbolRetry(
+  config: RuntimeConfig,
+  symbols: string[],
+  searchParams: Record<string, string>,
+  invalidSymbols: Set<string>,
+): Promise<AlpacaBarsResponse> {
+  try {
+    return await alpacaFetch<AlpacaBarsResponse>(config, config.ALPACA_DATA_URL, '/v2/stocks/bars', {
+      ...searchParams,
+      symbols: symbols.join(','),
+    });
+  } catch (error) {
+    const invalidSymbol = getInvalidSymbolFromAlpacaError(error);
+    if (!invalidSymbol || !symbols.includes(invalidSymbol)) throw error;
+
+    invalidSymbols.add(invalidSymbol);
+    const retrySymbols = symbols.filter((symbol) => symbol !== invalidSymbol);
+    console.warn('[alpacaClient] removing invalid Alpaca symbol and retrying bars request', {
+      invalidSymbol,
+      remainingSymbols: retrySymbols.length,
+    });
+
+    if (retrySymbols.length === 0) throw error;
+
+    return getBarsWithInvalidSymbolRetry(config, retrySymbols, searchParams, invalidSymbols);
+  }
+}
+
+export function getLastAlpacaMarketDataFailure() {
+  return lastAlpacaMarketDataFailure;
 }
 
 function positionName(symbol: string) {
@@ -113,7 +184,7 @@ export async function getAlpacaPortfolioState(): Promise<PortfolioState | undefi
   const config = await getConfig();
 
   if (!hasAlpacaCredentials(config)) {
-    console.log('[alpacaClient] credentials missing; using demo portfolio');
+    console.log('[alpacaClient] credentials missing; Alpaca portfolio unavailable');
     return undefined;
   }
 
@@ -145,7 +216,7 @@ export async function getAlpacaPortfolioState(): Promise<PortfolioState | undefi
 
     return portfolio;
   } catch (error) {
-    console.warn('[alpacaClient] failed to load Alpaca portfolio; using demo portfolio', error);
+    console.warn('[alpacaClient] failed to load Alpaca portfolio', error);
     return undefined;
   }
 }
@@ -161,7 +232,7 @@ function getRecentBarsWindow() {
 }
 
 function mapBars(symbol: string, bars: AlpacaBar[]): MarketCandle[] {
-  return bars.map((bar) => ({
+  return bars.slice(-CANDLES_PER_SYMBOL).map((bar) => ({
     symbol,
     timestamp: bar.t,
     open: bar.o,
@@ -176,8 +247,19 @@ export async function getAlpacaMarketSnapshot(symbols: string[]): Promise<Market
   const config = await getConfig();
 
   const uniqueSymbols = [...new Set(symbols.map((symbol) => symbol.toUpperCase()))];
+  lastAlpacaMarketDataFailure = undefined;
 
-  if (!hasAlpacaCredentials(config) || uniqueSymbols.length === 0) {
+  if (!hasAlpacaCredentials(config)) {
+    lastAlpacaMarketDataFailure = 'Alpaca credentials are missing.';
+    console.log('[alpacaClient] skipping Alpaca bars', {
+      hasCredentials: hasAlpacaCredentials(config),
+      symbols: uniqueSymbols,
+    });
+    return undefined;
+  }
+
+  if (uniqueSymbols.length === 0) {
+    lastAlpacaMarketDataFailure = 'No symbols were requested.';
     console.log('[alpacaClient] skipping Alpaca bars', {
       hasCredentials: hasAlpacaCredentials(config),
       symbols: uniqueSymbols,
@@ -187,21 +269,30 @@ export async function getAlpacaMarketSnapshot(symbols: string[]): Promise<Market
 
   try {
     const { start, end } = getRecentBarsWindow();
-    const payload = await alpacaFetch<AlpacaBarsResponse>(config, config.ALPACA_DATA_URL, '/v2/stocks/bars', {
-      symbols: uniqueSymbols.join(','),
+    const feed = config.ALPACA_DATA_FEED || 'iex';
+    const invalidSymbols = new Set<string>();
+    const requestedBarsLimit = Math.min(uniqueSymbols.length * CANDLES_PER_SYMBOL, MAX_ALPACA_BARS_LIMIT);
+    const payload = await getBarsWithInvalidSymbolRetry(config, uniqueSymbols, {
       timeframe: '1Hour',
       start,
       end,
-      limit: '12',
+      limit: String(requestedBarsLimit),
       adjustment: 'raw',
-      feed: 'iex',
-    });
+      feed,
+    }, invalidSymbols);
 
     const candles = uniqueSymbols.flatMap((symbol) => mapBars(symbol, payload.bars?.[symbol] ?? []));
+    const returnedSymbols = Object.keys(payload.bars ?? {});
 
     if (candles.length === 0) {
-      console.warn('[alpacaClient] Alpaca returned no bars; using demo market snapshot', {
+      lastAlpacaMarketDataFailure = `Alpaca returned zero bars for ${uniqueSymbols.length} symbols using feed=${feed}, timeframe=1Hour, start=${start}, end=${end}, limit=${requestedBarsLimit}.`;
+      console.warn('[alpacaClient] Alpaca returned no bars', {
         symbols: uniqueSymbols,
+        feed,
+        start,
+        end,
+        limit: requestedBarsLimit,
+        returnedSymbols,
       });
       return undefined;
     }
@@ -215,12 +306,111 @@ export async function getAlpacaMarketSnapshot(symbols: string[]): Promise<Market
     console.log('[alpacaClient] mapped market snapshot for AI input', {
       snapshotId: snapshot.snapshotId,
       symbols: uniqueSymbols,
+      skippedInvalidSymbols: [...invalidSymbols],
+      returnedSymbols,
+      returnedSymbolCount: returnedSymbols.length,
       candleCount: snapshot.candles.length,
     });
 
     return snapshot;
   } catch (error) {
-    console.warn('[alpacaClient] failed to load Alpaca bars; using demo market snapshot', error);
+    lastAlpacaMarketDataFailure = error instanceof Error ? error.message : String(error);
+    console.warn('[alpacaClient] failed to load Alpaca bars', error);
+    return undefined;
+  }
+}
+
+export async function submitAlpacaBuyOrder(plan: TradePlan): Promise<ExecutedTrade | undefined> {
+  const config = await getConfig();
+
+  if (!hasAlpacaCredentials(config)) {
+    console.warn('[alpacaClient] cannot submit Alpaca order; credentials missing', {
+      symbol: plan.symbol,
+      planId: plan.id,
+    });
+    return undefined;
+  }
+
+  if (plan.side !== 'buy' || plan.status !== 'planned') {
+    return undefined;
+  }
+
+  if (!plan.stopLossPrice || !plan.takeProfitPrice) {
+    console.warn('[alpacaClient] cannot submit Alpaca buy order without bracket exits', {
+      symbol: plan.symbol,
+      planId: plan.id,
+      stopLossPrice: plan.stopLossPrice,
+      takeProfitPrice: plan.takeProfitPrice,
+    });
+    return undefined;
+  }
+
+  const body = {
+    symbol: plan.symbol,
+    side: 'buy',
+    type: 'market',
+    qty: String(plan.quantity),
+    time_in_force: 'day',
+    order_class: 'bracket',
+    client_order_id: `agentictrade-${plan.id.replace(/-/g, '')}`,
+    take_profit: {
+      limit_price: priceString(plan.takeProfitPrice),
+    },
+    stop_loss: {
+      stop_price: priceString(plan.stopLossPrice),
+    },
+  };
+
+  console.log('[alpacaClient] submitting buy bracket order', {
+    symbol: plan.symbol,
+    quantity: plan.quantity,
+    planId: plan.id,
+    takeProfitPrice: plan.takeProfitPrice,
+    stopLossPrice: plan.stopLossPrice,
+    paper: config.ALPACA_PAPER,
+  });
+
+  try {
+    const order = await alpacaFetch<AlpacaOrder>(config, config.ALPACA_BASE_URL, '/v2/orders', undefined, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const submittedAt = order.submitted_at ?? new Date().toISOString();
+    const submittedPrice =
+      numberFromString(order.filled_avg_price) || numberFromString(order.limit_price) || plan.triggerPrice;
+
+    console.log('[alpacaClient] buy bracket order submitted', {
+      symbol: plan.symbol,
+      planId: plan.id,
+      orderId: order.id,
+      status: order.status,
+      type: order.type,
+    });
+
+    return {
+      id: order.id || plan.id,
+      symbol: plan.symbol,
+      action: 'buy',
+      quantity: plan.quantity,
+      price: submittedPrice,
+      stopLossPrice: plan.stopLossPrice,
+      takeProfitPrice: plan.takeProfitPrice,
+      executedAt: submittedAt,
+      reason: plan.reason,
+      brokerOrderId: order.id,
+      brokerOrderStatus: order.status,
+      brokerOrderType: order.type,
+    };
+  } catch (error) {
+    console.warn('[alpacaClient] failed to submit Alpaca buy order', {
+      symbol: plan.symbol,
+      planId: plan.id,
+      error,
+    });
     return undefined;
   }
 }

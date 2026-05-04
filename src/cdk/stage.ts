@@ -30,8 +30,8 @@ export function resolveStage(app: App): StageConfig {
     nodeEnv: isProd ? "production" : "development",
 
     lambda: {
-      memorySize: isProd ? 1024 : 512,
-      timeoutSeconds: isProd ? 30 : 20,
+      memorySize: isProd || isBeta ? 1024 : 512,
+      timeoutSeconds: isProd || isBeta ? 120 : 20,
     },
 
     tags: {

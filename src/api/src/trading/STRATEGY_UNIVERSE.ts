@@ -114,7 +114,6 @@ export const STRATEGY_UNIVERSE: StrategySymbol[] = [
   { symbol: 'AFRM', bucket: 'aggressive_stock' },
   { symbol: 'UPST', bucket: 'aggressive_stock' },
   { symbol: 'AI', bucket: 'aggressive_stock' },
-  { symbol: 'C3AI', bucket: 'aggressive_stock' },
 
   // Biotech / high volatility
   { symbol: 'MRNA', bucket: 'aggressive_stock' },

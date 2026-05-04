@@ -7,20 +7,41 @@ import { MODEL_NAME, PROMPT_VERSION, requestAiDecisions } from './aiDecisionEngi
 import { validateDecision } from './riskValidator';
 import { createTradeOutcome } from './tradePlanner';
 import { persistPipelineRun } from './tradingRepository';
-import type { ExecutedTrade, PipelineResult, TradePlan } from './types';
-import { getAlpacaPortfolioState } from './alpacaClient';
+import type { DecisionLogEntry, ExecutedTrade, PipelineResult, TradePlan } from './types';
+import { getAlpacaPortfolioState, submitAlpacaBuyOrder } from './alpacaClient';
 import { getDefaultStrategySymbols } from './strategy';
+import { getConfig } from '../process';
 
 export type RunTradingPipelineInput = {
   symbols?: string[];
 };
 
+async function getPortfolioForPipeline() {
+  const [config, alpacaPortfolio] = await Promise.all([getConfig(), getAlpacaPortfolioState()]);
+
+  if (alpacaPortfolio) {
+    return {
+      portfolio: alpacaPortfolio,
+      source: 'alpaca',
+    } as const;
+  }
+
+  if (config.DEMO_MODE) {
+    return {
+      portfolio: demoPortfolio,
+      source: 'demo',
+    } as const;
+  }
+
+  throw new Error('Alpaca portfolio is unavailable and DEMO_MODE is disabled. Refusing to use demo portfolio.');
+}
+
 export async function runTradingPipeline(input: RunTradingPipelineInput = {}): Promise<PipelineResult> {
   console.log('[pipeline] runTradingPipeline input', input);
-  const portfolio = (await getAlpacaPortfolioState()) ?? demoPortfolio;
+  const { portfolio, source } = await getPortfolioForPipeline();
 
   console.log('[pipeline] portfolio selected for AI input', {
-    source: portfolio === demoPortfolio ? 'demo' : 'alpaca',
+    source,
     accountId: portfolio.accountId,
     cash: portfolio.cash,
     buyingPower: portfolio.buyingPower,
@@ -66,24 +87,31 @@ export async function runTradingPipeline(input: RunTradingPipelineInput = {}): P
   const runTradePlans: TradePlan[] = [];
   const runExecutedTrades: ExecutedTrade[] = [];
 
-  const runDecisionLog = aiDecisions.map((aiDecision) => {
+  const runDecisionLog: DecisionLogEntry[] = [];
+
+  for (const aiDecision of aiDecisions) {
     const riskReview = validateDecision(aiDecision, portfolio);
     const outcome = createTradeOutcome(aiDecision, riskReview);
+    const executedPlannedBuy =
+      outcome.plan?.side === 'buy' && outcome.plan.status === 'planned'
+        ? await submitAlpacaBuyOrder(outcome.plan)
+        : undefined;
 
     console.log('[pipeline] decision reviewed', {
       aiDecision,
       riskReview,
       plan: outcome.plan,
-      executedTrade: outcome.executedTrade,
+      executedTrade: executedPlannedBuy ?? outcome.executedTrade,
     });
 
-    if (outcome.plan) {
+    if (outcome.plan && !executedPlannedBuy) {
       runTradePlans.unshift(outcome.plan);
       tradePlans.unshift(outcome.plan);
     }
-    if (outcome.executedTrade) {
-      runExecutedTrades.unshift(outcome.executedTrade);
-      executedTrades.unshift(outcome.executedTrade);
+    const executedTrade = executedPlannedBuy ?? outcome.executedTrade;
+    if (executedTrade) {
+      runExecutedTrades.unshift(executedTrade);
+      executedTrades.unshift(executedTrade);
     }
 
     const entry = {
@@ -102,8 +130,8 @@ export async function runTradingPipeline(input: RunTradingPipelineInput = {}): P
     };
 
     decisionLog.unshift(entry);
-    return entry;
-  });
+    runDecisionLog.push(entry);
+  }
 
   await persistPipelineRun({
     portfolio,
@@ -133,10 +161,10 @@ export async function runTradingPipeline(input: RunTradingPipelineInput = {}): P
 }
 
 export async function getTradingState(): Promise<Omit<PipelineResult, 'snapshot' | 'signals' | 'marketContext'>> {
-  const portfolio = (await getAlpacaPortfolioState()) ?? demoPortfolio;
+  const { portfolio, source } = await getPortfolioForPipeline();
 
   console.log('[pipeline] getTradingState portfolio selected', {
-    source: portfolio === demoPortfolio ? 'demo' : 'alpaca',
+    source,
     accountId: portfolio.accountId,
     cash: portfolio.cash,
     buyingPower: portfolio.buyingPower,

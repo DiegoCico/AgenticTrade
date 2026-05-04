@@ -254,10 +254,11 @@ export function mapPortfolioData(state: BackendTradingState): PortfolioData {
 export async function loadTradingDashboard() {
   console.log("[frontend:loadTradingDashboard] loading dashboard data");
 
-  const [state, tradeHistory] = await Promise.all([
-    trpcQuery<BackendTradingState>("aiTrading.getState"),
-    trpcQuery<TradeHistoryResponse>("aiTrading.getTradeHistory", { limit: 25 }),
-  ]);
+  const state = await trpcQuery<BackendTradingState>("aiTrading.getState");
+  const tradeHistory = await trpcQuery<TradeHistoryResponse>("aiTrading.getTradeHistory", {
+    accountId: state.portfolio.accountId,
+    limit: 25,
+  });
 
   console.log("[frontend:loadTradingDashboard] raw backend payloads", {
     state,

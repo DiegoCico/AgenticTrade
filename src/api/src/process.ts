@@ -21,6 +21,7 @@ const envSchema = z.object({
   ALPACA_SECRET_KEY: z.string().optional(),
   ALPACA_BASE_URL: z.string().default('https://paper-api.alpaca.markets/v2'),
   ALPACA_DATA_URL: z.string().default('https://data.alpaca.markets'),
+  ALPACA_DATA_FEED: z.string().default('iex'),
   ALPACA_PAPER: z.string().default('true'),
 
   // LLM Market Context
@@ -28,7 +29,7 @@ const envSchema = z.object({
   LLM_API_KEY: z.string().optional(),
   LLM_BASE_URL: z.string().default('https://api.openai.com/v1/chat/completions'),
   LLM_MODEL: z.string().optional(),
-  LLM_MARKET_CONTEXT_ENABLED: z.string().default('false'),
+  LLM_MARKET_CONTEXT_ENABLED: z.string().optional(),
 
   // CORS and URLs
   ALLOWED_ORIGINS: z.string().optional(),
@@ -50,11 +51,24 @@ const envSchema = z.object({
 // Cache for secrets to avoid repeated AWS calls
 let secretsCache: Record<string, any> = {};
 
+function parseBoolean(value: unknown): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  if (typeof value !== 'string') return undefined;
+
+  const normalized = value.trim().toLowerCase();
+  if (['true', '1', 'yes', 'on', 'enabled'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'off', 'disabled'].includes(normalized)) return false;
+
+  return undefined;
+}
+
 async function loadAlpacaSecretsFromAWS(secretArn: string): Promise<{
   ALPACA_API_KEY: string;
   ALPACA_SECRET_KEY: string;
   ALPACA_BASE_URL?: string;
   ALPACA_DATA_URL?: string;
+  ALPACA_DATA_FEED?: string;
   ALPACA_PAPER?: string;
 }> {
   if (secretsCache[secretArn]) {
@@ -86,7 +100,7 @@ async function loadLlmSecretsFromAWS(secretArn: string): Promise<{
   LLM_API_KEY: string;
   LLM_BASE_URL?: string;
   LLM_MODEL?: string;
-  LLM_MARKET_CONTEXT_ENABLED?: string;
+  LLM_MARKET_CONTEXT_ENABLED?: string | boolean;
 }> {
   if (secretsCache[secretArn]) {
     return secretsCache[secretArn];
@@ -135,6 +149,7 @@ export async function loadConfig() {
   let ALPACA_SECRET_KEY = env.ALPACA_SECRET_KEY ?? '';
   let ALPACA_BASE_URL = env.ALPACA_BASE_URL;
   let ALPACA_DATA_URL = env.ALPACA_DATA_URL;
+  let ALPACA_DATA_FEED = env.ALPACA_DATA_FEED;
   let ALPACA_PAPER = env.ALPACA_PAPER;
 
   if (env.ALPACA_SECRET_ARN && process.env.AWS_LAMBDA_FUNCTION_NAME) {
@@ -144,6 +159,7 @@ export async function loadConfig() {
       ALPACA_SECRET_KEY = secrets.ALPACA_SECRET_KEY || ALPACA_SECRET_KEY;
       ALPACA_BASE_URL = secrets.ALPACA_BASE_URL || ALPACA_BASE_URL;
       ALPACA_DATA_URL = secrets.ALPACA_DATA_URL || ALPACA_DATA_URL;
+      ALPACA_DATA_FEED = secrets.ALPACA_DATA_FEED || ALPACA_DATA_FEED;
       ALPACA_PAPER = secrets.ALPACA_PAPER || ALPACA_PAPER;
     } catch (error) {
       console.warn(`[process.ts] ⚠️  Failed to load Alpaca secrets from AWS, using environment variables`);
@@ -154,7 +170,7 @@ export async function loadConfig() {
   let LLM_API_KEY = env.LLM_API_KEY ?? '';
   let LLM_BASE_URL = env.LLM_BASE_URL;
   let LLM_MODEL = env.LLM_MODEL ?? '';
-  let LLM_MARKET_CONTEXT_ENABLED = env.LLM_MARKET_CONTEXT_ENABLED;
+  let LLM_MARKET_CONTEXT_ENABLED: string | boolean | undefined = env.LLM_MARKET_CONTEXT_ENABLED;
 
   if (env.LLM_SECRET_ARN && process.env.AWS_LAMBDA_FUNCTION_NAME) {
     try {
@@ -169,8 +185,12 @@ export async function loadConfig() {
     }
   }
 
-  // Demo mode
-  const DEMO_MODE = env.DEMO_MODE === 'true' || env.NODE_ENV === 'development';
+  // Demo mode is only implicit for local/dev stage. Beta and prod must use live Alpaca data unless explicitly overridden.
+  const DEMO_MODE = parseBoolean(env.DEMO_MODE) ?? (stage === 'dev' && env.NODE_ENV === 'development');
+
+  const llmEnabledOverride = parseBoolean(LLM_MARKET_CONTEXT_ENABLED);
+  const llmHasRuntimeConfig = Boolean(LLM_API_KEY && LLM_MODEL);
+  const llmMarketContextEnabled = llmEnabledOverride ?? llmHasRuntimeConfig;
 
   const config = {
     env,
@@ -185,6 +205,7 @@ export async function loadConfig() {
     ALPACA_SECRET_KEY,
     ALPACA_BASE_URL,
     ALPACA_DATA_URL,
+    ALPACA_DATA_FEED,
     ALPACA_PAPER: ALPACA_PAPER === 'true',
 
     // LLM
@@ -192,7 +213,7 @@ export async function loadConfig() {
     LLM_API_KEY,
     LLM_BASE_URL,
     LLM_MODEL,
-    LLM_MARKET_CONTEXT_ENABLED: LLM_MARKET_CONTEXT_ENABLED === 'true',
+    LLM_MARKET_CONTEXT_ENABLED: llmMarketContextEnabled,
 
     // URLs and CORS
     ALLOWED_ORIGINS,
@@ -216,6 +237,10 @@ export async function loadConfig() {
     warnings.push('⚠️  LLM market context is enabled but LLM credentials/model are not configured.');
   }
 
+  if (config.LLM_API_KEY && !config.LLM_MODEL) {
+    warnings.push('⚠️  LLM API key is configured but LLM_MODEL is missing. Market context will use deterministic fallback.');
+  }
+
   console.log(
     [
       '=============================================================',
@@ -224,7 +249,7 @@ export async function loadConfig() {
       `🧩 Table: ${config.TABLE_NAME}`,
       `🪣 Bucket: ${config.BUCKET_NAME}`,
       `📈 Alpaca: ${config.ALPACA_API_KEY ? 'configured' : 'not configured'} (${config.ALPACA_PAPER ? 'paper' : 'live'})`,
-      `🧠 LLM Market Context: ${config.LLM_MARKET_CONTEXT_ENABLED ? 'enabled' : 'disabled'} ${config.LLM_API_KEY ? '(configured)' : '(not configured)'}`,
+      `🧠 LLM Market Context: ${config.LLM_MARKET_CONTEXT_ENABLED ? 'enabled' : 'disabled'} ${config.LLM_API_KEY ? '(key configured)' : '(key not configured)'} ${config.LLM_MODEL ? `(model ${config.LLM_MODEL})` : '(model missing)'}`,
       `🌐 Web URL: ${config.WEB_URL}`,
       `🚀 Port: ${config.PORT}`,
       `🧪 Demo Mode: ${config.DEMO_MODE ? 'enabled' : 'disabled'}`,
@@ -258,7 +283,7 @@ export const config = (() => {
   const APP_SIGNIN_URL = env.APP_SIGNIN_URL ?? 'https://d2cktegyq4qcfk.cloudfront.net/signin';
   const WEB_URL = env.WEB_URL ?? 'https://d2cktegyq4qcfk.cloudfront.net';
   const LOCAL_WEB_ORIGIN = env.LOCAL_WEB_ORIGIN ?? 'http://localhost:5173';
-  const DEMO_MODE = env.DEMO_MODE === 'true' || env.NODE_ENV === 'development';
+  const DEMO_MODE = parseBoolean(env.DEMO_MODE) ?? (stage === 'dev' && env.NODE_ENV === 'development');
 
   return {
     env,
@@ -271,13 +296,14 @@ export const config = (() => {
     ALPACA_SECRET_KEY: env.ALPACA_SECRET_KEY ?? '',
     ALPACA_BASE_URL: env.ALPACA_BASE_URL,
     ALPACA_DATA_URL: env.ALPACA_DATA_URL,
+    ALPACA_DATA_FEED: env.ALPACA_DATA_FEED,
     ALPACA_PAPER: env.ALPACA_PAPER === 'true',
     ALPACA_SECRET_ARN: env.ALPACA_SECRET_ARN,
     LLM_PROVIDER: env.LLM_PROVIDER,
     LLM_API_KEY: env.LLM_API_KEY ?? '',
     LLM_BASE_URL: env.LLM_BASE_URL,
     LLM_MODEL: env.LLM_MODEL ?? '',
-    LLM_MARKET_CONTEXT_ENABLED: env.LLM_MARKET_CONTEXT_ENABLED === 'true',
+    LLM_MARKET_CONTEXT_ENABLED: parseBoolean(env.LLM_MARKET_CONTEXT_ENABLED) ?? Boolean(env.LLM_API_KEY && env.LLM_MODEL),
     LLM_SECRET_ARN: env.LLM_SECRET_ARN,
     ALLOWED_ORIGINS,
     LOCAL_WEB_ORIGIN,

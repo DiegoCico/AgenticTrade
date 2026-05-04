@@ -56,6 +56,7 @@ export class ApiStack extends cdk.Stack {
       DYNAMODB_TABLE_NAME: props.ddbTable.tableName,
       ALPACA_SECRET_ARN: alpacaSecret.secretArn,
       LLM_SECRET_ARN: llmSecret.secretArn,
+      DEMO_MODE: stage.name === "dev" ? "true" : "false",
     };
 
     // ===== Lambda (tRPC Handler) =====

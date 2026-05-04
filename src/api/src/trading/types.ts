@@ -129,6 +129,9 @@ export type ExecutedTrade = {
   takeProfitPrice?: number;
   executedAt: string;
   reason: string;
+  brokerOrderId?: string;
+  brokerOrderStatus?: string;
+  brokerOrderType?: string;
 };
 
 export type DecisionLogEntry = {
