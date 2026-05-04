@@ -34,7 +34,7 @@ src/api/src/trading/marketData.ts
 src/api/src/trading/alpacaClient.ts
 ```
 
-This loads candles for the requested symbols. The API first tries Alpaca market data when Alpaca credentials are configured. If Alpaca is unavailable, it falls back to demo market data.
+This loads candles for the requested symbols. The API first tries Alpaca market data when Alpaca credentials are configured. If Alpaca is unavailable, it falls back to demo market data only when `DEMO_MODE=true`. In beta/prod, demo mode is disabled and the API throws instead of using fixture candles.
 
 If the caller does not provide symbols, `pipeline.ts` now uses the AI-managed strategy universe from `STRATEGY_UNIVERSE.ts` plus any current holdings. That makes the normal flow AI-selected instead of user-selected.
 
@@ -52,9 +52,11 @@ Alpaca market data request:
 GET {ALPACA_DATA_URL}/v2/stocks/bars
 symbols={symbols}
 timeframe=1Hour
-limit=12
-feed=iex
+limit=min(symbolCount * 12, 10000)
+feed={ALPACA_DATA_FEED, default "iex"}
 ```
+
+The Alpaca adapter follows pagination and maps the most recent 12 hourly candles per returned symbol. If Alpaca rejects invalid symbols, the adapter retries without the rejected tickers and logs the skipped symbols.
 
 The mapped candle data sent into the AI flow includes:
 
@@ -119,7 +121,7 @@ That portfolio object is passed into:
 
 So the AI market-context prompt sees what stocks the Alpaca account currently has, how many shares it owns, the average cost, current price, allocation, cash, buying power, and total portfolio value.
 
-If Alpaca credentials are missing or Alpaca returns an error, the pipeline logs the failure and uses `demoPortfolio` instead.
+If Alpaca credentials are missing or Alpaca returns an error, the pipeline logs the failure. It uses `demoPortfolio` only when `DEMO_MODE=true`; otherwise the request fails so beta/prod do not silently evaluate or trade on demo data.
 
 ### Step 2: Trading Signals
 
@@ -165,7 +167,7 @@ LLM_BASE_URL=...
 LLM_MODEL=...
 ```
 
-If those values are missing, disabled, or the request fails, the backend uses `fallbackMarketContext()` instead.
+If `LLM_MARKET_CONTEXT_ENABLED` is omitted, the config loader enables the LLM automatically when a key and model are configured. If the LLM is explicitly disabled, missing required values, or the request fails, the backend uses `fallbackMarketContext()` instead.
 
 ## Current LLM Request
 
@@ -409,10 +411,10 @@ The decision engine now defaults to `hold`. It only plans a buy or trim when all
 For a planned buy:
 
 - signal must be `bullish`
-- momentum must be at least `1.8%`
-- volume ratio must be at least `1.1`
-- volatility must be at or below `3.5%`
-- final confidence must be at least `75`
+- momentum must be at least `1.0%`
+- volume ratio must be at least `0.2`
+- volatility must be at or below `7.5%`
+- final confidence must be at least `70`
 - symbol must be selected by the strategy ranker
 - the strategy sleeve must still have allocation room
 - the position must not be near max allocation
@@ -438,6 +440,8 @@ If a symbol is bullish and clears the no-trade gate:
 - confidence: based on momentum, volume ratio, LLM scores, and market-context view
 
 The policy ranks bullish candidates inside each sleeve and only plans buys for selected candidates. If a sleeve is already at or above target, bullish candidates in that sleeve are held instead of bought.
+
+Approved buy plans are submitted to Alpaca paper trading as market bracket orders. The take-profit and stop-loss prices from the decision become the Alpaca bracket legs, and broker order ID/status metadata is stored with the executed trade record.
 
 ### Bearish Signal
 
@@ -538,6 +542,7 @@ Today:
 - LLM generates market context only
 - deterministic code generates trade decisions
 - deterministic risk validation approves or blocks decisions
+- approved buy plans can be sent to Alpaca paper trading
 
 To make the LLM generate final trade decisions later, replace the body of `requestAiDecisions()` while preserving its input and output types.
 

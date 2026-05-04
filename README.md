@@ -2,7 +2,7 @@
 
 AgenticTrade is an AI-assisted paper trading dashboard. The frontend shows portfolio performance, current positions, AI trade decisions, and planned buy/sell triggers. The backend exposes a tRPC API with a controlled trading pipeline that evaluates market snapshots, calculates signals, asks an AI decision layer for actions, validates those actions through risk rules, and records the resulting plans or trades.
 
-The current implementation is built for paper trading and demo data first. Alpaca credentials are managed through AWS Secrets Manager for deployed environments.
+The current implementation is built for Alpaca paper trading in deployed environments. Demo data is only used when `DEMO_MODE=true`; beta/prod deployments disable demo mode and refuse to run the trading pipeline if live Alpaca market data is unavailable.
 
 ## Project Structure
 
@@ -17,10 +17,12 @@ src/
 
 Frontend tabs:
 
-- `Portfolio`: portfolio value, animated performance chart, AI status, positions, watchlist, recent AI decisions
+- `Portfolio`: portfolio value, animated performance chart, AI status, positions, and watchlist
 - `Current positions`: current holdings with latest bought/sold/trimmed/held action and hoverable AI reasoning
 - `Trade plans`: planned buy/sell triggers such as “buy AMD if it hits $158”
-- `Decisions`: recent AI decision log cards
+- `Decisions`: recent AI decision log cards with date/time context and detail dialogs
+
+The dashboard refreshes backend data every 10 seconds for 5 minutes after page load. After that, live updates pause and the user must refresh the page to start another polling window. Position and watchlist rows open the symbol's TradingView chart in a new tab.
 
 Backend pipeline:
 
@@ -30,7 +32,7 @@ Market snapshot
   -> LLM/fallback market context
   -> AI decision layer
   -> Risk validator
-  -> Trade planner / executor
+  -> Trade planner / Alpaca paper order submitter
   -> Decision log
 ```
 
@@ -130,8 +132,10 @@ LLM_PROVIDER=openai-compatible
 LLM_API_KEY=your_key
 LLM_BASE_URL=https://api.openai.com/v1/chat/completions
 LLM_MODEL=your_model
-LLM_MARKET_CONTEXT_ENABLED=false
+LLM_MARKET_CONTEXT_ENABLED=true
 ```
+
+If `LLM_MARKET_CONTEXT_ENABLED` is omitted, the API auto-enables LLM market context when a key and model are configured. Set it to `false` only when you explicitly want deterministic fallback market context.
 
 Deployed environments use the CDK-created Alpaca secret:
 
@@ -147,7 +151,42 @@ Expected secret JSON:
   "ALPACA_SECRET_KEY": "your_secret",
   "ALPACA_BASE_URL": "https://paper-api.alpaca.markets/v2",
   "ALPACA_DATA_URL": "https://data.alpaca.markets",
+  "ALPACA_DATA_FEED": "iex",
   "ALPACA_PAPER": "true"
+}
+```
+
+## Manual Lambda Test Event
+
+To run the trading evaluation manually from the AWS Lambda console, use the tRPC HTTP API v2 event shape:
+
+```json
+{
+  "version": "2.0",
+  "routeKey": "POST /trpc/{proxy+}",
+  "rawPath": "/trpc/aiTrading.evaluate",
+  "rawQueryString": "",
+  "headers": {
+    "content-type": "application/json",
+    "origin": "https://d2cktegyq4qcfk.cloudfront.net"
+  },
+  "requestContext": {
+    "http": {
+      "method": "POST",
+      "path": "/trpc/aiTrading.evaluate",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "127.0.0.1",
+      "userAgent": "lambda-console-test"
+    },
+    "requestId": "manual-test",
+    "routeKey": "POST /trpc/{proxy+}",
+    "stage": "$default"
+  },
+  "pathParameters": {
+    "proxy": "aiTrading.evaluate"
+  },
+  "body": "{\"json\":{}}",
+  "isBase64Encoded": false
 }
 ```
 

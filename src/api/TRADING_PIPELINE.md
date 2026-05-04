@@ -17,7 +17,7 @@ This API uses a controlled trading pipeline instead of sending raw stocks direct
    - buys cannot exceed max position allocation
    - stop-loss and take-profit prices must be valid for the requested action
 7. `tradePlanner.ts` turns approved decisions into planned trades or executed trades, preserving any stop-loss and take-profit guardrails.
-8. `pipeline.ts` logs every decision with the prompt version, model name, input snapshot, market context, AI output, decision journal, LLM influence record, and risk review.
+8. `pipeline.ts` submits approved buy plans to Alpaca paper trading as market bracket orders when Alpaca is configured, then logs every decision with the prompt version, model name, input snapshot, market context, AI output, decision journal, LLM influence record, risk review, plan, and broker order metadata.
 
 ## AI-Managed Strategy
 
@@ -34,7 +34,7 @@ The current universe is defined in `src/api/src/trading/STRATEGY_UNIVERSE.ts`. I
 
 The decision engine ranks bullish candidates by momentum, volume, and volatility, then chooses a limited number from each sleeve. Buy quantities are sized against the remaining sleeve target and still pass through the deterministic risk gate.
 
-The engine has a no-trade bias: it defaults to `hold` unless a symbol has a strong signal, high final confidence, allocation room, and valid risk controls. Every decision includes a journal explaining whether the no-trade bias was applied or cleared.
+The engine has a no-trade bias, but it is tuned to be moderately aggressive for paper trading. It defaults to `hold` unless a symbol has a bullish signal, acceptable volatility, enough final confidence, allocation room, and valid risk controls. Every decision includes a journal explaining whether the no-trade bias was applied or cleared.
 
 ## Scheduled Evaluation
 
@@ -60,8 +60,10 @@ LLM_PROVIDER=openai-compatible
 LLM_API_KEY=...
 LLM_BASE_URL=https://api.openai.com/v1/chat/completions
 LLM_MODEL=...
-LLM_MARKET_CONTEXT_ENABLED=false
+LLM_MARKET_CONTEXT_ENABLED=true
 ```
+
+`LLM_MARKET_CONTEXT_ENABLED` can be omitted. When omitted, the API enables LLM market context automatically if `LLM_API_KEY` and `LLM_MODEL` are configured. Set it to `false` only to force deterministic fallback context.
 
 Deployed Lambda functions receive `LLM_SECRET_ARN` from CDK. The API config loader reads that secret from AWS Secrets Manager and falls back to environment variables for local development.
 
@@ -73,11 +75,11 @@ The CDK-created secret stores:
   "LLM_API_KEY": "...",
   "LLM_BASE_URL": "https://api.openai.com/v1/chat/completions",
   "LLM_MODEL": "...",
-  "LLM_MARKET_CONTEXT_ENABLED": "false"
+  "LLM_MARKET_CONTEXT_ENABLED": "true"
 }
 ```
 
-When enabled, the pipeline sends portfolio state, a bucket-level universe summary, compact screened signals, and ranked candidate signals to the LLM. It does not send raw candle arrays; candles are converted into signals first to keep token usage controlled. The LLM returns strict JSON containing `summary`, `themes`, and `perSymbol` views. If the LLM is disabled, unconfigured, or fails, the pipeline uses deterministic fallback context so evaluation still runs.
+When enabled, the pipeline sends portfolio state, a bucket-level universe summary, compact screened signals, and ranked candidate signals to the LLM. It does not send raw candle arrays; candles are converted into signals first to keep token usage controlled. The LLM returns strict JSON containing `summary`, `themes`, and `perSymbol` views. If the LLM is explicitly disabled, unconfigured, or fails, the pipeline uses deterministic fallback context so evaluation still runs.
 
 ## Alpaca Integration
 
@@ -90,6 +92,7 @@ ALPACA_API_KEY=...
 ALPACA_SECRET_KEY=...
 ALPACA_BASE_URL=https://paper-api.alpaca.markets/v2
 ALPACA_DATA_URL=https://data.alpaca.markets
+ALPACA_DATA_FEED=iex
 ALPACA_PAPER=true
 ```
 
@@ -103,6 +106,7 @@ The CDK-created secret stores:
   "ALPACA_SECRET_KEY": "...",
   "ALPACA_BASE_URL": "https://paper-api.alpaca.markets/v2",
   "ALPACA_DATA_URL": "https://data.alpaca.markets",
+  "ALPACA_DATA_FEED": "iex",
   "ALPACA_PAPER": "true"
 }
 ```
@@ -115,6 +119,10 @@ npm run setup-alpaca-secrets -- --stage dev --api-key your_key --secret-key your
 
 Use `--live` only when intentionally switching away from paper trading.
 
+In beta/prod, `DEMO_MODE=false`. If Alpaca market data cannot be loaded, the API throws instead of falling back to demo candles. This prevents accidental trades or decisions based on stale fixture data.
+
+Alpaca bars are requested with pagination and invalid-symbol retry handling. The mapped snapshot keeps the most recent 12 hourly candles per returned symbol. Approved buy plans are submitted to Alpaca as paper market bracket orders with take-profit and stop-loss legs.
+
 ## API Surface
 
 The tRPC router is mounted at `aiTrading`.
@@ -125,6 +133,7 @@ The tRPC router is mounted at `aiTrading`.
 - `aiTrading.getTradePlans`
 - `aiTrading.getDecisions`
 - `aiTrading.evaluate`
+- `aiTrading.getTradeHistory`
 
 Example mutation input:
 
@@ -135,6 +144,40 @@ Example mutation input:
 ```
 
 If `symbols` is omitted, the pipeline evaluates the AI-managed strategy universe plus current holdings. Provide `symbols` only when you want to override the default strategy universe for a manual evaluation.
+
+## Manual Lambda Test Event
+
+For the AWS Lambda console, invoke the tRPC handler with an HTTP API v2 event. The important pieces are `rawPath`, `pathParameters.proxy`, and the tRPC body:
+
+```json
+{
+  "version": "2.0",
+  "routeKey": "POST /trpc/{proxy+}",
+  "rawPath": "/trpc/aiTrading.evaluate",
+  "rawQueryString": "",
+  "headers": {
+    "content-type": "application/json",
+    "origin": "https://d2cktegyq4qcfk.cloudfront.net"
+  },
+  "requestContext": {
+    "http": {
+      "method": "POST",
+      "path": "/trpc/aiTrading.evaluate",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "127.0.0.1",
+      "userAgent": "lambda-console-test"
+    },
+    "requestId": "manual-test",
+    "routeKey": "POST /trpc/{proxy+}",
+    "stage": "$default"
+  },
+  "pathParameters": {
+    "proxy": "aiTrading.evaluate"
+  },
+  "body": "{\"json\":{}}",
+  "isBase64Encoded": false
+}
+```
 
 ## Stop Loss And Take Profit
 

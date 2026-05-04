@@ -20,7 +20,7 @@ src/api/
       index.ts           root app router
       trpc.ts            tRPC initialization/context
     trading/
-      aiDecisionEngine.ts mock AI decision layer
+      aiDecisionEngine.ts deterministic AI decision layer
       demoData.ts         demo portfolio and market candles
       marketData.ts       market snapshot loader
       marketContext.ts    LLM/fallback market-data context generation
@@ -28,6 +28,7 @@ src/api/
       riskValidator.ts    deterministic safety gate
       signals.ts          market signal calculations
       tradePlanner.ts     creates planned/executed trade outcomes
+      tradingRepository.ts DynamoDB persistence and history reads
       types.ts            pipeline types
     handler.ts            Lambda entry
     scheduled-trading.ts  EventBridge Scheduler entry for daily market evaluation
@@ -74,18 +75,19 @@ getMarketSnapshot()
   -> requestAiDecisions()
   -> validateDecision()
   -> createTradeOutcome()
+  -> submitAlpacaBuyOrder() for approved paper buy plans
   -> decisionLog
 ```
 
 Current behavior:
 
 - Loads Alpaca account, positions, and market bars when credentials are configured.
-- Falls back to demo candles and demo portfolio data when Alpaca is unavailable.
+- Uses demo data only when `DEMO_MODE=true`; beta/prod disable demo mode and refuse to run if Alpaca market data is unavailable.
 - Uses the default AI-managed universe when symbols are not supplied.
 - Adds an LLM-ready market-context pass before final decisions.
-- Uses a deterministic mock AI policy engine.
+- Uses a deterministic AI policy engine for final decisions.
 - Includes stop-loss and take-profit prices when the AI decision calls for them.
-- Creates in-memory trade plans and executed trades.
+- Creates trade plans and submits approved paper buy plans to Alpaca as bracket orders.
 - Logs every recommendation with prompt version, model name, input snapshot, AI output, and risk review.
 
 Read `TRADING_PIPELINE.md` for the deeper design notes and the expected Alpaca integration path.
@@ -147,20 +149,24 @@ ALPACA_API_KEY=your_key
 ALPACA_SECRET_KEY=your_secret
 ALPACA_BASE_URL=https://paper-api.alpaca.markets/v2
 ALPACA_DATA_URL=https://data.alpaca.markets
+ALPACA_DATA_FEED=iex
 ALPACA_PAPER=true
 
 LLM_PROVIDER=openai-compatible
 LLM_API_KEY=your_llm_api_key
 LLM_BASE_URL=https://api.openai.com/v1/chat/completions
 LLM_MODEL=your_model
-LLM_MARKET_CONTEXT_ENABLED=false
+LLM_MARKET_CONTEXT_ENABLED=true
 ```
+
+If `LLM_MARKET_CONTEXT_ENABLED` is omitted, LLM market context is enabled automatically when a key and model are configured. Set it to `false` only to force fallback context.
 
 For Lambda, CDK injects:
 
 ```txt
 ALPACA_SECRET_ARN=...
 LLM_SECRET_ARN=...
+DEMO_MODE=false
 ```
 
 `process.ts` loads Alpaca and LLM credentials from AWS Secrets Manager when running in Lambda and falls back to environment variables for local development.
@@ -176,8 +182,42 @@ npm test
 
 The local API listens on `PORT` or `3001` by default.
 
+## Manual Lambda Test Event
+
+Use this event in the AWS Lambda console to manually run `aiTrading.evaluate`:
+
+```json
+{
+  "version": "2.0",
+  "routeKey": "POST /trpc/{proxy+}",
+  "rawPath": "/trpc/aiTrading.evaluate",
+  "rawQueryString": "",
+  "headers": {
+    "content-type": "application/json",
+    "origin": "https://d2cktegyq4qcfk.cloudfront.net"
+  },
+  "requestContext": {
+    "http": {
+      "method": "POST",
+      "path": "/trpc/aiTrading.evaluate",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "127.0.0.1",
+      "userAgent": "lambda-console-test"
+    },
+    "requestId": "manual-test",
+    "routeKey": "POST /trpc/{proxy+}",
+    "stage": "$default"
+  },
+  "pathParameters": {
+    "proxy": "aiTrading.evaluate"
+  },
+  "body": "{\"json\":{}}",
+  "isBase64Encoded": false
+}
+```
+
 ## Notes
 
-- The current `protectedProcedure` is a pass-through alias while the trading API is in demo/public mode.
-- Alpaca order submission is not implemented yet; the pipeline is ready for an execution adapter.
-- Tests currently pass with no test files present.
+- The current `protectedProcedure` is a pass-through alias while the trading API is still early-stage.
+- Alpaca order submission is implemented for approved paper buy plans through bracket market orders.
+- The final trade-decision stage is deterministic; the LLM currently provides market context only.

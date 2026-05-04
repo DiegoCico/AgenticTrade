@@ -1,6 +1,6 @@
 # AgenticTrade Frontend
 
-The frontend is a Vite + React dashboard for watching how the AI trading system is performing. It currently uses local JSON fixture data so the UI can be developed before the backend is fully connected.
+The frontend is a Vite + React dashboard for watching how the AI trading system is performing. It loads portfolio, position, plan, and decision data from the backend tRPC API.
 
 ## Stack
 
@@ -18,10 +18,12 @@ The app uses top-level tabs in `AppHeader`.
 
 | Tab | Purpose |
 | --- | --- |
-| `Portfolio` | Portfolio value, animated chart, AI status, positions, watchlist, recent decisions |
+| `Portfolio` | Portfolio value, animated chart, AI status, positions, and watchlist |
 | `Current positions` | Current holdings plus bought/sold/trimmed/held action context and AI-thought tooltips |
 | `Trade plans` | Planned buy/sell triggers with confidence and risk notes |
-| `Decisions` | Recent AI decisions |
+| `Decisions` | Recent AI decisions with date/time context and detail dialogs |
+
+Position and watchlist rows open the symbol's TradingView chart in a new tab.
 
 ## Directory Structure
 
@@ -51,6 +53,7 @@ src/frontend/
       portfolio.ts
     utils/
       formatters.ts
+      tradingView.ts
     App.tsx
     App.css
     index.css
@@ -59,23 +62,14 @@ src/frontend/
 
 ## Data
 
-Temporary fixture data lives in:
+The UI loads dashboard data from `src/frontend/src/api/tradingApi.ts`.
 
-```txt
-src/frontend/src/data/portfolio.json
-```
+It calls:
 
-It includes:
+- `aiTrading.getState`
+- `aiTrading.getTradeHistory`
 
-- account state
-- portfolio summary
-- performance series by timeframe
-- positions
-- recent trades/decisions
-- watchlist items
-- planned trade triggers
-
-The backend equivalent is being built under `src/api/src/trading`.
+`portfolio.json` remains in the worktree as a development fixture/reference, but the app no longer uses it as the primary data source. If the backend returns no history, the UI renders empty lists instead of inventing fixture trades.
 
 ## Development
 
@@ -137,6 +131,10 @@ VITE_API_URL=https://your-api-host
 ```
 
 If the backend returns no history, the UI renders empty lists. It does not fall back to fixture trades.
+
+After page load, `App.tsx` refreshes backend dashboard data every 10 seconds for 5 minutes. When the 5-minute window expires, polling stops and the UI asks the user to refresh the page to resume live updates.
+
+The frontend maps recent trade history back onto open positions so the Current Positions tab can show the latest AI thought for each held symbol. It also creates fallback chart points from live portfolio/position values when the backend does not return a historical performance series.
 
 Debug logs are intentionally verbose in the browser console:
 

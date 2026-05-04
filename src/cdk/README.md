@@ -55,6 +55,7 @@ Default JSON shape:
   "ALPACA_SECRET_KEY": "replace-me",
   "ALPACA_BASE_URL": "https://paper-api.alpaca.markets/v2",
   "ALPACA_DATA_URL": "https://data.alpaca.markets",
+  "ALPACA_DATA_FEED": "iex",
   "ALPACA_PAPER": "true"
 }
 ```
@@ -84,12 +85,12 @@ Default JSON shape:
   "LLM_PROVIDER": "openai-compatible",
   "LLM_API_KEY": "replace-me",
   "LLM_BASE_URL": "https://api.openai.com/v1/chat/completions",
-  "LLM_MODEL": "replace-me",
-  "LLM_MARKET_CONTEXT_ENABLED": "false"
+  "LLM_MODEL": "gpt-4.1-mini",
+  "LLM_MARKET_CONTEXT_ENABLED": "true"
 }
 ```
 
-The API Lambda receives `LLM_SECRET_ARN` and is granted read access to that secret. Set `LLM_MARKET_CONTEXT_ENABLED` to `"true"` after the key, endpoint, and model are configured.
+The API Lambda receives `LLM_SECRET_ARN` and is granted read access to that secret. If `LLM_MARKET_CONTEXT_ENABLED` is omitted, the API auto-enables LLM market context when a key and model are configured. Set it to `"false"` only when forcing deterministic fallback context.
 
 ## API Stack
 
@@ -115,7 +116,11 @@ SERVICE_NAME
 DYNAMODB_TABLE_NAME
 ALPACA_SECRET_ARN
 LLM_SECRET_ARN
+DEMO_MODE
+ALPACA_DATA_FEED
 ```
+
+`DEMO_MODE` is `true` for dev and `false` for beta/prod. Beta/prod Lambdas use 1024 MB and a 120-second timeout. Dev uses 512 MB and a 20-second timeout.
 
 Scheduled trading evaluation:
 
@@ -125,6 +130,8 @@ timezone: America/New_York
 ```
 
 This runs once per weekday at 10:00 AM New York time, 30 minutes after the regular U.S. market open. The scheduled Lambda gets the same DynamoDB and secret permissions as the API Lambda.
+
+Manual evaluation can also be run through the Lambda console by invoking the tRPC handler with an HTTP API v2 event for `/trpc/aiTrading.evaluate`.
 
 ## Web Stack
 

@@ -38,7 +38,7 @@ aiTrading.getDecisions
 aiTrading.evaluate
 ```
 
-When DynamoDB persistence is added, `getState` should be backed by the latest portfolio snapshot plus recent decision/trade records. Add a dedicated route for the full timeline:
+`getState` is backed by current portfolio state plus recent decision/trade records. The dedicated route for the full timeline is:
 
 ```txt
 aiTrading.getTradeHistory
@@ -72,10 +72,9 @@ Use prefixed `pk` and `sk` strings so related records can be queried together.
 | AI decision | `ACCOUNT#{accountId}` | `DECISION#{createdAt}#{decisionId}` | AI output and risk review |
 | Trade plan | `ACCOUNT#{accountId}` | `PLAN#{createdAt}#{planId}` | Planned or blocked trade |
 | Executed trade | `ACCOUNT#{accountId}` | `TRADE#{executedAt}#{tradeId}` | Purchase/sale execution record |
-| Symbol timeline item | `SYMBOL#{symbol}` | `TRADE#{executedAt}#{tradeId}` | Query history by symbol |
-| Symbol AI decision | `SYMBOL#{symbol}` | `DECISION#{createdAt}#{decisionId}` | Query AI thoughts by symbol |
+| LLM influence | `ACCOUNT#{accountId}` | `LLM_INFLUENCE#{createdAt}#{decisionId}` | Query market-context influence on decisions |
 
-The `ACCOUNT#...` partition is the primary source for the dashboard and account-level history. The `SYMBOL#...` records are duplicated summary records for fast symbol history without scanning the account partition.
+The `ACCOUNT#...` partition is the primary source for the dashboard and account-level history. Symbol filtering currently uses the account history feed with a filter expression; move to a symbol-specific GSI only if that read path needs optimization.
 
 ## Current Index Rollout
 
@@ -169,17 +168,17 @@ This is the purchase/sale history record the frontend should render in a trade t
 
 ```json
 {
-  "pk": "ACCOUNT#paper-agentictrade",
+  "pk": "ACCOUNT#0a6343d3-ef4a-4a17-b3dc-416130ec7326",
   "sk": "TRADE#2026-05-03T14:35:21.000Z#trade_01H...",
   "entityType": "EXECUTED_TRADE",
   "schemaVersion": 1,
-  "accountId": "paper-agentictrade",
+  "accountId": "0a6343d3-ef4a-4a17-b3dc-416130ec7326",
   "tradeId": "trade_01H...",
   "decisionId": "decision_01H...",
   "planId": "plan_01H...",
   "snapshotId": "snapshot_2026-05-03_1435",
   "symbol": "NVDA",
-  "action": "buy",
+  "action": "plan_buy",
   "side": "buy",
   "quantity": 4,
   "price": 928.36,
@@ -191,7 +190,7 @@ This is the purchase/sale history record the frontend should render in a trade t
   "source": "paper",
   "broker": "alpaca",
   "brokerOrderId": "alpaca-order-id",
-  "status": "executed",
+  "status": "accepted",
   "stopLossPrice": 890,
   "takeProfitPrice": 1010,
   "aiThought": {
@@ -199,12 +198,12 @@ This is the purchase/sale history record the frontend should render in a trade t
     "reason": "NVDA has positive momentum with acceptable volatility.",
     "riskNotes": "Trade value is below max trade size and stop loss is valid.",
     "confidence": 78,
-    "model": "mock-policy-v1",
-    "promptVersion": "trading-decision-v1"
+    "model": "mock-policy-engine",
+    "promptVersion": "trading-pipeline-v1"
   },
   "riskReview": {
     "approved": true,
-    "finalAction": "buy",
+    "finalAction": "plan_buy",
     "reasons": []
   },
   "createdAt": "2026-05-03T14:35:21.000Z",
@@ -218,20 +217,20 @@ Persist the full decision log so trades can be audited later.
 
 ```json
 {
-  "pk": "ACCOUNT#paper-agentictrade",
+  "pk": "ACCOUNT#0a6343d3-ef4a-4a17-b3dc-416130ec7326",
   "sk": "DECISION#2026-05-03T14:35:20.000Z#decision_01H...",
   "entityType": "AI_DECISION",
   "schemaVersion": 1,
-  "accountId": "paper-agentictrade",
+  "accountId": "0a6343d3-ef4a-4a17-b3dc-416130ec7326",
   "decisionId": "decision_01H...",
   "snapshotId": "snapshot_2026-05-03_1435",
   "symbol": "NVDA",
   "createdAt": "2026-05-03T14:35:20.000Z",
-  "promptVersion": "trading-decision-v1",
-  "model": "mock-policy-v1",
+  "promptVersion": "trading-pipeline-v1",
+  "model": "mock-policy-engine",
   "aiDecision": {
     "symbol": "NVDA",
-    "action": "buy",
+    "action": "plan_buy",
     "quantity": 4,
     "triggerPrice": 928.36,
     "stopLossPrice": 890,
@@ -242,7 +241,7 @@ Persist the full decision log so trades can be audited later.
   },
   "riskReview": {
     "approved": true,
-    "finalAction": "buy",
+    "finalAction": "plan_buy",
     "reasons": []
   },
   "inputSummary": {
@@ -264,11 +263,11 @@ Store a compact `inputSummary` on the decision item for quick timeline rendering
 
 ```json
 {
-  "pk": "ACCOUNT#paper-agentictrade",
+  "pk": "ACCOUNT#0a6343d3-ef4a-4a17-b3dc-416130ec7326",
   "sk": "PLAN#2026-05-03T14:35:20.000Z#plan_01H...",
   "entityType": "TRADE_PLAN",
   "schemaVersion": 1,
-  "accountId": "paper-agentictrade",
+  "accountId": "0a6343d3-ef4a-4a17-b3dc-416130ec7326",
   "planId": "plan_01H...",
   "decisionId": "decision_01H...",
   "snapshotId": "snapshot_2026-05-03_1435",
@@ -287,15 +286,46 @@ Store a compact `inputSummary` on the decision item for quick timeline rendering
 }
 ```
 
+### LLM Influence
+
+Each decision also writes a compact LLM influence item so the market-context effect can be analyzed without scanning full decision records.
+
+```json
+{
+  "pk": "ACCOUNT#0a6343d3-ef4a-4a17-b3dc-416130ec7326",
+  "sk": "LLM_INFLUENCE#2026-05-04T16:18:25.534Z#decision_01H...",
+  "entityType": "LLM_INFLUENCE",
+  "schemaVersion": 1,
+  "accountId": "0a6343d3-ef4a-4a17-b3dc-416130ec7326",
+  "decisionId": "decision_01H...",
+  "symbol": "NVDA",
+  "action": "plan_buy",
+  "riskApprovedFinalAction": "plan_buy",
+  "preLlmConfidence": 72,
+  "finalConfidence": 78,
+  "confidenceDelta": 6,
+  "noTradeBiasApplied": false,
+  "llmInfluence": {
+    "view": "constructive",
+    "opportunityScore": 78,
+    "riskScore": 25,
+    "confidenceScore": 82,
+    "confidenceAdjustment": 6,
+    "noTradeBiasApplied": false
+  },
+  "createdAt": "2026-05-04T16:18:25.534Z"
+}
+```
+
 ### Portfolio Snapshot
 
 ```json
 {
-  "pk": "ACCOUNT#paper-agentictrade",
+  "pk": "ACCOUNT#0a6343d3-ef4a-4a17-b3dc-416130ec7326",
   "sk": "PORTFOLIO#2026-05-03T14:35:20.000Z",
   "entityType": "PORTFOLIO_SNAPSHOT",
   "schemaVersion": 1,
-  "accountId": "paper-agentictrade",
+  "accountId": "0a6343d3-ef4a-4a17-b3dc-416130ec7326",
   "cash": 12842.25,
   "buyingPower": 25684.5,
   "totalValue": 184263.78,
@@ -373,11 +403,12 @@ When `runTradingPipeline()` runs:
 1. Write one `MARKET_SNAPSHOT` item and related `CANDLE` items.
 2. Write a `PORTFOLIO_SNAPSHOT` item.
 3. For each AI output, write an `AI_DECISION` item.
-4. If risk validation creates a plan, write a `TRADE_PLAN` item.
-5. If an order executes, write an `EXECUTED_TRADE` item.
-6. Also write compact duplicated `SYMBOL#...` timeline records for symbol-level queries.
+4. For each AI output, write an `LLM_INFLUENCE` item.
+5. If risk validation creates a plan, write a `TRADE_PLAN` item.
+6. If an Alpaca paper order is accepted, write an `EXECUTED_TRADE` item with broker metadata.
+7. Write account-level `TRADE_HISTORY_ITEM` records for decisions, plans, and executed trades.
 
-Use DynamoDB `TransactWriteItems` for records that must stay linked, such as decision plus plan or decision plus executed trade. Use conditional writes on IDs to avoid duplicate records when a Lambda retries.
+The current implementation writes in DynamoDB batch chunks of 25 items. Use conditional writes or transactions later only for records that must become strictly idempotent across Lambda retries.
 
 ## Read Patterns
 
