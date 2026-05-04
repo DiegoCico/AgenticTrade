@@ -1,5 +1,10 @@
 import type { MarketSnapshot, PortfolioState, TradingSignal } from './types';
 
+const BULLISH_MOMENTUM_PERCENT = 1;
+const BULLISH_VOLUME_RATIO = 0.2;
+const BEARISH_MOMENTUM_PERCENT = -1.2;
+const BEARISH_VOLATILITY_PERCENT = 7.5;
+
 export function calculateSignals(portfolio: PortfolioState, snapshot: MarketSnapshot): TradingSignal[] {
   const candlesBySymbol = new Map<string, typeof snapshot.candles>();
 
@@ -20,8 +25,10 @@ export function calculateSignals(portfolio: PortfolioState, snapshot: MarketSnap
     const positionAllocationPercent = position?.allocationPercent ?? 0;
 
     let signal: TradingSignal['signal'] = 'neutral';
-    if (momentumPercent > 1.2 && volumeRatio > 1.05) signal = 'bullish';
-    if (momentumPercent < -1.2 || volatilityPercent > 4) signal = 'bearish';
+    if (momentumPercent > BULLISH_MOMENTUM_PERCENT && volumeRatio >= BULLISH_VOLUME_RATIO) signal = 'bullish';
+    if (momentumPercent < BEARISH_MOMENTUM_PERCENT || (volatilityPercent > BEARISH_VOLATILITY_PERCENT && momentumPercent <= BULLISH_MOMENTUM_PERCENT)) {
+      signal = 'bearish';
+    }
 
     return {
       symbol,

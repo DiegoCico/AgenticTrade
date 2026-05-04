@@ -9,11 +9,11 @@ import {
 export const PROMPT_VERSION = 'trading-pipeline-v1';
 export const MODEL_NAME = 'mock-policy-engine';
 
-const MIN_BUY_CONFIDENCE = 75;
+const MIN_BUY_CONFIDENCE = 70;
 const MIN_TRIM_CONFIDENCE = 72;
-const STRONG_BUY_MOMENTUM = 1.8;
-const STRONG_BUY_VOLUME_RATIO = 1.1;
-const MAX_BUY_VOLATILITY = 3.5;
+const STRONG_BUY_MOMENTUM = 1;
+const STRONG_BUY_VOLUME_RATIO = 0.2;
+const MAX_BUY_VOLATILITY = 7.5;
 const STRONG_SELL_MOMENTUM = -1.8;
 const STRONG_RISK_VOLATILITY = 4;
 

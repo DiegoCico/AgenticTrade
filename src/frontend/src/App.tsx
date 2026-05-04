@@ -8,18 +8,29 @@ import { CurrentPositions } from "./components/dashboard/CurrentPositions";
 import type { PortfolioData, Theme } from "./types/portfolio";
 import "./App.css";
 
+const PORTFOLIO_REFRESH_INTERVAL_MS = 10_000;
+const PORTFOLIO_REFRESH_WINDOW_MS = 5 * 60_000;
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("portfolio");
   const [data, setData] = useState<PortfolioData>(emptyPortfolioData);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPollingExpired, setIsPollingExpired] = useState(false);
   const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
     let cancelled = false;
+    let isRequestInFlight = false;
+    let hasLoadedOnce = false;
 
-    async function loadData() {
+    async function loadData({ showLoading }: { showLoading: boolean }) {
+      if (isRequestInFlight) return;
+      isRequestInFlight = true;
       console.log("[frontend:App] starting backend data load");
-      setIsLoading(true);
+
+      if (showLoading) {
+        setIsLoading(true);
+      }
 
       try {
         const nextData = await loadTradingDashboard();
@@ -27,24 +38,40 @@ export default function App() {
 
         if (!cancelled) {
           setData(nextData);
+          hasLoadedOnce = true;
         }
       } catch (error) {
         console.error("[frontend:App] backend data load failed; rendering empty state", error);
 
-        if (!cancelled) {
+        if (!cancelled && !hasLoadedOnce) {
           setData(emptyPortfolioData);
         }
       } finally {
         if (!cancelled) {
           setIsLoading(false);
         }
+        isRequestInFlight = false;
       }
     }
 
-    loadData();
+    loadData({ showLoading: true });
+
+    const refreshInterval = window.setInterval(() => {
+      loadData({ showLoading: false });
+    }, PORTFOLIO_REFRESH_INTERVAL_MS);
+
+    const refreshTimeout = window.setTimeout(() => {
+      window.clearInterval(refreshInterval);
+
+      if (!cancelled) {
+        setIsPollingExpired(true);
+      }
+    }, PORTFOLIO_REFRESH_WINDOW_MS);
 
     return () => {
       cancelled = true;
+      window.clearInterval(refreshInterval);
+      window.clearTimeout(refreshTimeout);
     };
   }, []);
 
@@ -66,6 +93,7 @@ export default function App() {
         onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
       />
       {isLoading && <div className="loading-strip">Loading backend data...</div>}
+      {isPollingExpired && <div className="loading-strip">Live updates paused after 5 minutes. Refresh the page to resume.</div>}
       {activeTab === "portfolio" && <PortfolioDashboard data={data} />}
       {activeTab === "positions" && (
         <section className="catalog-page">

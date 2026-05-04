@@ -4,7 +4,6 @@ import { useState } from "react";
 import { AIStatusPanel } from "../components/dashboard/AIStatusPanel";
 import { PerformanceChart } from "../components/dashboard/PerformanceChart";
 import { PositionsList } from "../components/dashboard/PositionsList";
-import { RecentDecisions } from "../components/dashboard/RecentDecisions";
 import { Watchlist } from "../components/dashboard/Watchlist";
 import type { PerformanceRange, PortfolioData } from "../types/portfolio";
 import { formatPercent, money } from "../utils/formatters";
@@ -55,7 +54,6 @@ export function PortfolioDashboard({ data }: PortfolioDashboardProps) {
 
         <div className="right-column">
           <Watchlist items={data.watchlist} />
-          <RecentDecisions buyingPower={data.account.buyingPower} trades={data.trades} />
         </div>
       </section>
     </>

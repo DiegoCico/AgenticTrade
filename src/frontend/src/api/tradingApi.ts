@@ -171,6 +171,16 @@ function formatAction(action: BackendTradeAction) {
   return action.charAt(0).toUpperCase() + action.slice(1);
 }
 
+function formatDecisionDateTime(value: string) {
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function mapPosition(position: BackendPosition, decisions: BackendDecision[]): Position {
   const latestDecision = decisions.find((decision) => decision.aiDecision.symbol === position.symbol);
   const marketValue = Number((position.shares * position.price).toFixed(2));
@@ -187,7 +197,7 @@ function mapPosition(position: BackendPosition, decisions: BackendDecision[]): P
     allocation: position.allocationPercent,
     aiSignal: latestDecision ? formatAction(latestDecision.aiDecision.action) : "No signal",
     lastAction: latestDecision?.aiDecision.action === "buy" || latestDecision?.aiDecision.action === "plan_buy" ? "Bought" : latestDecision?.aiDecision.action === "sell" || latestDecision?.aiDecision.action === "plan_sell" ? "Sold" : latestDecision?.aiDecision.action === "trim" ? "Trimmed" : "Held",
-    actionTime: latestDecision ? new Date(latestDecision.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "",
+    actionTime: latestDecision ? formatDecisionDateTime(latestDecision.createdAt) : "",
     actionPrice: latestDecision?.aiDecision.triggerPrice ?? position.price,
     aiThought: latestDecision?.aiDecision.reason ?? "",
   };
@@ -267,7 +277,7 @@ export async function loadTradingDashboard() {
 
   const data = mapPortfolioData(state);
   data.trades = tradeHistory.items.map((item) => ({
-    time: new Date(item.occurredAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+    time: formatDecisionDateTime(item.occurredAt),
     action: formatAction(item.action),
     symbol: item.symbol,
     quantity: item.quantity,
