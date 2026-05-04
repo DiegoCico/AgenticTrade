@@ -1,5 +1,6 @@
 import type { WatchlistItem } from "../../types/portfolio";
 import { money } from "../../utils/formatters";
+import { getTradingViewChartUrl } from "../../utils/tradingView";
 import { ChangeBadge } from "../common/ChangeBadge";
 
 type WatchlistProps = {
@@ -14,11 +15,11 @@ export function Watchlist({ items }: WatchlistProps) {
         <span>AI tracked</span>
       </div>
       {items.map((item) => (
-        <div className="watch-row" key={item.symbol}>
+        <a className="watch-row" href={getTradingViewChartUrl(item.symbol)} key={item.symbol} rel="noreferrer" target="_blank">
           <strong>{item.symbol}</strong>
           <span>{money.format(item.price)}</span>
           <ChangeBadge value={item.changePercent} />
-        </div>
+        </a>
       ))}
     </section>
   );

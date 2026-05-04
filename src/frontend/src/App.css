@@ -341,6 +341,7 @@ h2 {
   grid-template-columns: 1.4fr 1fr 1fr 0.8fr;
   min-height: 76px;
   padding: 14px 16px;
+  text-decoration: none;
 }
 
 .current-positions-list {
@@ -358,6 +359,17 @@ h2 {
   grid-template-columns: 1.35fr 0.6fr 1fr 0.8fr 1fr auto;
   min-height: 82px;
   padding: 14px 16px;
+}
+
+.current-position-row {
+  cursor: pointer;
+}
+
+.current-position-row:focus-visible,
+.position-row:focus-visible,
+.watch-row:focus-visible {
+  border-color: var(--accent);
+  outline: none;
 }
 
 .current-position-row > div {
@@ -532,6 +544,7 @@ h2 {
   gap: 12px;
   min-height: 48px;
   padding: 0 14px;
+  text-decoration: none;
 }
 
 .trade-card {

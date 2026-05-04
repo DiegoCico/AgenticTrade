@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Info } from "lucide-react";
 import type { Position } from "../../types/portfolio";
 import { money } from "../../utils/formatters";
+import { getTradingViewChartUrl } from "../../utils/tradingView";
 import { ChangeBadge } from "../common/ChangeBadge";
 
 type CurrentPositionsProps = {
@@ -21,6 +22,10 @@ function actionClass(action: Position["lastAction"]) {
 }
 
 export function CurrentPositions({ positions }: CurrentPositionsProps) {
+  function openTradingView(symbol: string) {
+    window.open(getTradingViewChartUrl(symbol), "_blank", "noopener,noreferrer");
+  }
+
   return (
     <section className="current-positions-panel">
       <div className="section-header">
@@ -35,7 +40,16 @@ export function CurrentPositions({ positions }: CurrentPositionsProps) {
             className="current-position-row"
             initial={{ opacity: 0, y: 10 }}
             key={position.symbol}
+            onClick={() => openTradingView(position.symbol)}
+            role="link"
+            tabIndex={0}
             transition={{ duration: 0.28, delay: index * 0.04 }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openTradingView(position.symbol);
+              }
+            }}
           >
             <div className="current-position-main">
               <strong>{position.symbol}</strong>
@@ -65,7 +79,13 @@ export function CurrentPositions({ positions }: CurrentPositionsProps) {
             </div>
 
             <div className="thought-cell">
-              <button className="thought-button" type="button" aria-label={`AI thoughts for ${position.symbol}`}>
+              <button
+                className="thought-button"
+                type="button"
+                aria-label={`AI thoughts for ${position.symbol}`}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
                 <Info size={16} />
               </button>
               <div className="thought-tooltip" role="tooltip">
