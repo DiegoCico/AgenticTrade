@@ -14,6 +14,9 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 
+type AlpacaAgentId = "conservative" | "neutral" | "aggressive";
+type AlpacaAgentSecrets = Record<AlpacaAgentId, secretsmanager.ISecret>;
+
 export interface ApiStackProps extends cdk.StackProps {
   stage: {
     name: string;                    // prod | beta | dev
@@ -29,7 +32,7 @@ export interface ApiStackProps extends cdk.StackProps {
   };
   ddbTable: dynamodb.Table;
   serviceName?: string;
-  alpacaSecret: secretsmanager.Secret;
+  alpacaSecrets: AlpacaAgentSecrets;
   llmSecret: secretsmanager.Secret;
 }
 
@@ -44,7 +47,7 @@ export class ApiStack extends cdk.Stack {
     const stage = props.stage;
     const serviceName = props.serviceName ?? "agentictrade-api";
 
-    const alpacaSecret = props.alpacaSecret;
+    const alpacaSecrets = props.alpacaSecrets;
     const llmSecret = props.llmSecret;
     const lambdaEnvironment = {
       NODE_OPTIONS: "--enable-source-maps",
@@ -54,7 +57,10 @@ export class ApiStack extends cdk.Stack {
       TABLE_NAME: props.ddbTable.tableName,
       APP_REGION: this.region,
       DYNAMODB_TABLE_NAME: props.ddbTable.tableName,
-      ALPACA_SECRET_ARN: alpacaSecret.secretArn,
+      ALPACA_SECRET_ARN: alpacaSecrets.neutral.secretArn,
+      ALPACA_CONSERVATIVE_SECRET_ARN: alpacaSecrets.conservative.secretArn,
+      ALPACA_NEUTRAL_SECRET_ARN: alpacaSecrets.neutral.secretArn,
+      ALPACA_AGGRESSIVE_SECRET_ARN: alpacaSecrets.aggressive.secretArn,
       LLM_SECRET_ARN: llmSecret.secretArn,
       DEMO_MODE: stage.name === "dev" ? "true" : "false",
     };
@@ -108,9 +114,9 @@ export class ApiStack extends cdk.Stack {
     props.ddbTable.grantReadWriteData(this.tradingCronFn);
 
     // ===== Secrets Manager Permissions =====
-    alpacaSecret.grantRead(this.apiFn);
+    Object.values(alpacaSecrets).forEach((secret) => secret.grantRead(this.apiFn));
     llmSecret.grantRead(this.apiFn);
-    alpacaSecret.grantRead(this.tradingCronFn);
+    Object.values(alpacaSecrets).forEach((secret) => secret.grantRead(this.tradingCronFn));
     llmSecret.grantRead(this.tradingCronFn);
 
     // ===== Schedule: Monday-Friday, 30 minutes after market open =====
@@ -127,9 +133,25 @@ export class ApiStack extends cdk.Stack {
 
     new scheduler.CfnSchedule(this, "TradingCronSchedule", {
       name: `${serviceName}-${stage.name}-trading-cron`,
-      description: "Runs the AgenticTrade AI evaluation Monday-Friday at 10:00 AM America/New_York.",
+      description: "Runs the AgenticTrade neutral AI evaluation Monday-Friday at 10:00 AM and 3:00 PM America/New_York.",
       flexibleTimeWindow: { mode: "OFF" },
-      scheduleExpression: "cron(0 10 ? * MON-FRI *)",
+      scheduleExpression: "cron(0 10,15 ? * MON-FRI *)",
+      scheduleExpressionTimezone: "America/New_York",
+      target: {
+        arn: this.tradingCronFn.functionArn,
+        roleArn: schedulerRole.roleArn,
+        input: JSON.stringify({
+          source: "agentictrade.scheduler",
+          job: "trading-evaluation",
+        }),
+      },
+    });
+
+    new scheduler.CfnSchedule(this, "TradingCronMiddaySchedule", {
+      name: `${serviceName}-${stage.name}-trading-cron-midday`,
+      description: "Runs the AgenticTrade neutral AI evaluation Monday-Friday at 12:30 PM America/New_York.",
+      flexibleTimeWindow: { mode: "OFF" },
+      scheduleExpression: "cron(30 12 ? * MON-FRI *)",
       scheduleExpressionTimezone: "America/New_York",
       target: {
         arn: this.tradingCronFn.functionArn,

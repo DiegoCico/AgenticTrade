@@ -93,7 +93,7 @@ const api = new ApiStack(app, `AgentictradeApi-${cfg.name}`, {
   },
 
   ddbTable: dynamo.table,
-  alpacaSecret: alpacaSecrets.alpacaSecret,
+  alpacaSecrets: alpacaSecrets.alpacaSecrets,
   llmSecret: llmSecrets.llmSecret,
 });
 

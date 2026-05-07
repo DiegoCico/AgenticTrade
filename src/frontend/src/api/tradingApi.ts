@@ -2,10 +2,31 @@ import type {
   PerformancePoint,
   PortfolioData,
   Position,
+  TradingAgentId,
   TradeHistoryItem,
   TradeHistoryResponse,
   TradePlan,
 } from "../types/portfolio";
+
+export const tradingAgentOptions = [
+  {
+    id: "conservative",
+    label: "Conservative Agent",
+    description: "ETF and high-dividend focused",
+  },
+  {
+    id: "neutral",
+    label: "Neutral Agent",
+    description: "Current balanced strategy",
+  },
+  {
+    id: "aggressive",
+    label: "Aggressive Agent",
+    description: "Short-term 1-7 day trades",
+  },
+] as const;
+
+export const defaultTradingAgentId: TradingAgentId = "neutral";
 
 type BackendTradeAction = "buy" | "sell" | "trim" | "hold" | "plan_buy" | "plan_sell" | "watch";
 
@@ -249,7 +270,7 @@ function mapPlan(plan: BackendTradePlan, positions: BackendPosition[]): TradePla
   };
 }
 
-export function mapPortfolioData(state: BackendTradingState): PortfolioData {
+export function mapPortfolioData(state: BackendTradingState, agentId: TradingAgentId = defaultTradingAgentId): PortfolioData {
   const positions = state.portfolio.positions.map((position) => mapPosition(position, state.decisions));
   const plans = state.tradePlans.map((plan) => mapPlan(plan, state.portfolio.positions));
   const investedCost = state.portfolio.positions.reduce((total, position) => total + position.shares * position.averageCost, 0);
@@ -263,7 +284,7 @@ export function mapPortfolioData(state: BackendTradingState): PortfolioData {
     ...emptyPortfolioData,
     account: {
       name: state.portfolio.accountId,
-      mode: "paper",
+      mode: tradingAgentOptions.find((agent) => agent.id === agentId)?.label ?? "Neutral Agent",
       lastUpdated: new Date().toISOString(),
       cash: state.portfolio.cash,
       buyingPower: state.portfolio.buyingPower,
@@ -330,12 +351,13 @@ function createRangePoints(labels: string[], totalValue: number, rawChange: numb
   });
 }
 
-export async function loadTradingDashboard() {
+export async function loadTradingDashboard(agentId: TradingAgentId = defaultTradingAgentId) {
   console.log("[frontend:loadTradingDashboard] loading dashboard data");
 
-  const state = await trpcQuery<BackendTradingState>("aiTrading.getState");
+  const state = await trpcQuery<BackendTradingState>("aiTrading.getState", { agentId });
   const tradeHistory = await trpcQuery<TradeHistoryResponse>("aiTrading.getTradeHistory", {
     accountId: state.portfolio.accountId,
+    agentId,
     limit: 25,
   });
 
@@ -344,7 +366,7 @@ export async function loadTradingDashboard() {
     tradeHistory,
   });
 
-  const data = mapPortfolioData(state);
+  const data = mapPortfolioData(state, agentId);
   data.positions = enrichPositionsFromHistory(data.positions, tradeHistory.items);
   data.trades = tradeHistory.items.map((item) => ({
     time: formatDecisionDateTime(item.occurredAt),

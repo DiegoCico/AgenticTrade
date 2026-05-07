@@ -4,8 +4,8 @@ This API uses a controlled trading pipeline instead of sending raw stocks direct
 
 ## Flow
 
-1. `strategy.ts` resolves the AI-managed strategy universe when the caller does not provide symbols.
-2. `marketData.ts` loads a market snapshot for the resolved symbols.
+1. `strategy.ts` resolves the selected trading agent and AI-managed strategy universe when the caller does not provide symbols.
+2. `marketData.ts` loads a market snapshot for the resolved symbols using the selected agent's Alpaca credentials.
 3. `signals.ts` converts raw candles into structured signals such as momentum, volatility, volume ratio, and current allocation.
 4. `marketContext.ts` gives the agentic AI a market-data review step. It can call an OpenAI-compatible LLM endpoint for structured symbol views and scores, or fall back to deterministic market context.
 5. `aiDecisionEngine.ts` receives portfolio state, signals, and market context, then returns strict decision objects. Decisions include a journal with no-trade gate results, LLM influence, pre/post confidence, entry/trigger prices, stop-loss prices, and take-profit prices. It is currently a deterministic mock policy engine, but this is where the full LLM decision call should be plugged in later.
@@ -17,18 +17,32 @@ This API uses a controlled trading pipeline instead of sending raw stocks direct
    - buys cannot exceed max position allocation
    - stop-loss and take-profit prices must be valid for the requested action
 7. `tradePlanner.ts` turns approved decisions into planned trades or executed trades, preserving any stop-loss and take-profit guardrails.
-8. `pipeline.ts` submits approved buy plans to Alpaca paper trading as market bracket orders when Alpaca is configured, then logs every decision with the prompt version, model name, input snapshot, market context, AI output, decision journal, LLM influence record, risk review, plan, and broker order metadata.
+8. `pipeline.ts` submits approved buy plans to the selected agent's Alpaca paper account as market bracket orders when Alpaca is configured, then logs every decision with the prompt version, model name, input snapshot, market context, AI output, decision journal, LLM influence record, risk review, plan, and broker order metadata.
 
 ## AI-Managed Strategy
 
-When `aiTrading.evaluate` is called without `symbols`, the AI-managed strategy evaluates a built-in universe instead of asking the user for tickers.
+When `aiTrading.evaluate` is called without `symbols`, the AI-managed strategy evaluates a built-in universe instead of asking the user for tickers. The optional `agentId` can be `conservative`, `neutral`, or `aggressive`; it defaults to `neutral`.
 
-Target allocation:
+Neutral target allocation:
 
 - ETFs: target 35%, with a 30-40% intended range
 - Stocks: target 65%
 - Safer stock sleeve: target 32.5%
 - Aggressive stock sleeve: target 32.5%
+
+Conservative target allocation:
+
+- ETFs: target 55%, with a 45-65% intended range
+- Safer stock sleeve: target 35%
+- Aggressive stock sleeve: target 10%
+- Smaller trade sizes, higher buy confidence, lower volatility ceiling, and more ETF/safer-stock picks
+
+Aggressive target allocation:
+
+- ETFs: target 20%, with a 15-30% intended range
+- Safer stock sleeve: target 25%
+- Aggressive stock sleeve: target 55%
+- Larger trade sizes, lower buy confidence threshold, higher volatility ceiling, and tighter short-term bracket exits
 
 The current universe is defined in `src/api/src/trading/STRATEGY_UNIVERSE.ts`. It contains ETF, safer-stock, and aggressive-stock candidates used by the default AI-managed evaluation.
 
@@ -40,14 +54,17 @@ The engine has a no-trade bias, but it is tuned to be moderately aggressive for 
 
 The deployed API stack includes a dedicated scheduled Lambda entry point at `src/scheduled-trading.ts`.
 
-EventBridge Scheduler invokes it Monday through Friday at `10:00 AM America/New_York`, which is 30 minutes after the regular U.S. market open.
+EventBridge Scheduler invokes it Monday through Friday at `10:00 AM`, `12:30 PM`, and `3:00 PM America/New_York`.
 
 ```txt
-cron(0 10 ? * MON-FRI *)
+cron(0 10,15 ? * MON-FRI *)
+cron(30 12 ? * MON-FRI *)
 timezone: America/New_York
 ```
 
-The scheduled Lambda runs the same `runTradingPipeline()` function used by the manual `aiTrading.evaluate` mutation. That keeps manual and automated evaluations on the same code path.
+The scheduled Lambda runs the same `runTradingPipeline()` function used by the manual `aiTrading.evaluate` mutation. Each scheduled invocation runs Conservative, Neutral, and Aggressive independently.
+
+Each agent result is isolated. If one scheduled agent fails after retries, the Lambda logs and returns that agent's failure while allowing the other agents to complete.
 
 ## LLM Market Context
 
@@ -96,9 +113,17 @@ ALPACA_DATA_FEED=iex
 ALPACA_PAPER=true
 ```
 
-Deployed Lambda functions receive `ALPACA_SECRET_ARN` from CDK. The API config loader reads that secret from AWS Secrets Manager and falls back to environment variables if the secret cannot be loaded.
+Deployed Lambda functions receive one Alpaca secret ARN per agent from CDK:
 
-The CDK-created secret stores:
+```txt
+ALPACA_CONSERVATIVE_SECRET_ARN
+ALPACA_NEUTRAL_SECRET_ARN
+ALPACA_AGGRESSIVE_SECRET_ARN
+```
+
+`ALPACA_SECRET_ARN` is still set as a Neutral compatibility alias. The API config loader reads the selected agent's secret from AWS Secrets Manager and falls back to environment variables if the secret cannot be loaded.
+
+Each CDK-created secret stores:
 
 ```json
 {
@@ -111,17 +136,13 @@ The CDK-created secret stores:
 }
 ```
 
-After deployment, update it with:
-
-```bash
-npm run setup-alpaca-secrets -- --stage dev --api-key your_key --secret-key your_secret
-```
-
-Use `--live` only when intentionally switching away from paper trading.
+After deployment, update each secret directly in AWS Secrets Manager. Real Alpaca keys should not be committed to CDK source. Use `ALPACA_PAPER=false` only when intentionally switching away from paper trading.
 
 In beta/prod, `DEMO_MODE=false`. If Alpaca market data cannot be loaded, the API throws instead of falling back to demo candles. This prevents accidental trades or decisions based on stale fixture data.
 
-Alpaca bars are requested with pagination and invalid-symbol retry handling. The mapped snapshot keeps the most recent 12 hourly candles per returned symbol. Approved buy plans are submitted to Alpaca as paper market bracket orders with take-profit and stop-loss legs.
+Alpaca bars are requested with pagination and invalid-symbol retry handling. The mapped snapshot keeps the most recent 12 hourly candles per returned symbol. Approved buy plans are submitted to the selected agent's Alpaca account as paper market bracket orders with take-profit and stop-loss legs.
+
+Alpaca 429 rate-limit responses are retried up to 4 total attempts. Each retry waits a randomized 1-10 seconds before trying again.
 
 ## API Surface
 
@@ -134,16 +155,20 @@ The tRPC router is mounted at `aiTrading`.
 - `aiTrading.getDecisions`
 - `aiTrading.evaluate`
 - `aiTrading.getTradeHistory`
+- `aiTrading.getAgents`
 
 Example mutation input:
 
 ```json
 {
+  "agentId": "aggressive",
   "symbols": ["NVDA", "MSFT", "TSLA"]
 }
 ```
 
 If `symbols` is omitted, the pipeline evaluates the AI-managed strategy universe plus current holdings. Provide `symbols` only when you want to override the default strategy universe for a manual evaluation.
+
+Each read route accepts optional `agentId` where relevant. `aiTrading.getTradeHistory` also accepts `accountId`; when omitted, it resolves the account id from the selected agent's current Alpaca portfolio.
 
 ## Manual Lambda Test Event
 
@@ -174,7 +199,7 @@ For the AWS Lambda console, invoke the tRPC handler with an HTTP API v2 event. T
   "pathParameters": {
     "proxy": "aiTrading.evaluate"
   },
-  "body": "{\"json\":{}}",
+  "body": "{\"json\":{\"agentId\":\"neutral\"}}",
   "isBase64Encoded": false
 }
 ```

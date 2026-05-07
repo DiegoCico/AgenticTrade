@@ -4,6 +4,8 @@ import {
   getBucketTargetPercent,
   getSelectedBuySymbols,
   getStrategyBucket,
+  getTradingAgentProfile,
+  type TradingAgentId,
 } from './strategy';
 
 export const PROMPT_VERSION = 'trading-pipeline-v1';
@@ -13,7 +15,6 @@ const MIN_BUY_CONFIDENCE = 70;
 const MIN_TRIM_CONFIDENCE = 72;
 const STRONG_BUY_MOMENTUM = 1;
 const STRONG_BUY_VOLUME_RATIO = 0.2;
-const MAX_BUY_VOLATILITY = 7.5;
 const STRONG_SELL_MOMENTUM = -1.8;
 const STRONG_RISK_VOLATILITY = 4;
 
@@ -21,10 +22,13 @@ export type AiDecisionInput = {
   portfolio: PortfolioState;
   signals: TradingSignal[];
   marketContext: MarketContext;
+  agentId?: TradingAgentId;
 };
 
 export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDecision[]> {
-  const selectedBuySymbols = getSelectedBuySymbols(input.signals);
+  const agentProfile = getTradingAgentProfile(input.agentId);
+  const selectedBuySymbols = getSelectedBuySymbols(input.signals, agentProfile.id);
+  const minBuyConfidence = MIN_BUY_CONFIDENCE + agentProfile.buyConfidenceOffset;
 
   return input.signals.map((signal) => {
     const position = input.portfolio.positions.find((item) => item.symbol === signal.symbol);
@@ -33,11 +37,11 @@ export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDeci
     const nearMaxAllocation = signal.positionAllocationPercent >= input.portfolio.maxPositionPercent * 0.85;
     const contextNote = symbolContext ? ` Market context: ${symbolContext.rationale}` : '';
     const llmInfluence = getLlmInfluence(symbolContext);
-    const plannedEntry = Number((signal.currentPrice * 0.985).toFixed(2));
-    const stopLossPrice = Number((plannedEntry * 0.96).toFixed(2));
-    const takeProfitPrice = Number((plannedEntry * 1.08).toFixed(2));
+    const plannedEntry = Number((signal.currentPrice * (1 - agentProfile.entryPullbackPercent)).toFixed(2));
+    const stopLossPrice = Number((plannedEntry * (1 - agentProfile.stopLossPercent)).toFixed(2));
+    const takeProfitPrice = Number((plannedEntry * (1 + agentProfile.takeProfitPercent)).toFixed(2));
     const bucket = getStrategyBucket(signal.symbol);
-    const bucketTarget = getBucketTargetPercent(bucket);
+    const bucketTarget = getBucketTargetPercent(bucket, agentProfile.id);
     const bucketAllocation = getBucketAllocationPercent(input.portfolio, bucket);
     const bucketRemainingPercent = bucketTarget === undefined ? undefined : bucketTarget - bucketAllocation;
     const selectedBucketBuys = input.signals.filter(
@@ -45,8 +49,11 @@ export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDeci
     ).length;
     const targetTradePercent =
       bucketRemainingPercent === undefined
-        ? 2.5
-        : Math.min(input.portfolio.maxTradeValuePercent, bucketRemainingPercent / Math.max(selectedBucketBuys, 1));
+        ? 2.5 * agentProfile.maxTradeValueMultiplier
+        : Math.min(
+            input.portfolio.maxTradeValuePercent * agentProfile.maxTradeValueMultiplier,
+            bucketRemainingPercent / Math.max(selectedBucketBuys, 1),
+          );
     const plannedQuantity = Math.max(1, Math.floor((input.portfolio.totalValue * (targetTradePercent / 100)) / signal.currentPrice));
     const preLlmBuyConfidence = Math.round(68 + signal.momentumPercent * 3 + signal.volumeRatio * 2);
     const buyConfidence = Math.min(92, preLlmBuyConfidence + llmInfluence.confidenceAdjustment);
@@ -55,7 +62,7 @@ export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDeci
     const strongBuySignal =
       signal.momentumPercent >= STRONG_BUY_MOMENTUM &&
       signal.volumeRatio >= STRONG_BUY_VOLUME_RATIO &&
-      signal.volatilityPercent <= MAX_BUY_VOLATILITY;
+      signal.volatilityPercent <= agentProfile.maxBuyVolatility;
     const strongTrimSignal = signal.momentumPercent <= STRONG_SELL_MOMENTUM || signal.volatilityPercent >= STRONG_RISK_VOLATILITY;
     const baseCheckpoints = [
       `bucket=${bucket}`,
@@ -72,7 +79,7 @@ export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDeci
     if (
       signal.signal === 'bullish' &&
       strongBuySignal &&
-      buyConfidence >= MIN_BUY_CONFIDENCE &&
+      buyConfidence >= minBuyConfidence &&
       !nearMaxAllocation &&
       selectedBuySymbols.has(signal.symbol) &&
       (bucketRemainingPercent === undefined || bucketRemainingPercent > 0)
@@ -87,8 +94,9 @@ export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDeci
         executionPlan: `Plan a pullback buy at ${plannedEntry}, stop at ${stopLossPrice}, take profit at ${takeProfitPrice}.`,
         checkpoints: [
           ...baseCheckpoints,
+          `agent=${agentProfile.id}`,
           `strongBuySignal=${strongBuySignal}`,
-          `minBuyConfidence=${MIN_BUY_CONFIDENCE}`,
+          `minBuyConfidence=${minBuyConfidence}`,
           `selectedByStrategy=true`,
         ],
       });
@@ -101,7 +109,7 @@ export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDeci
         stopLossPrice,
         takeProfitPrice,
         confidence: buyConfidence,
-        reason: `${signal.symbol} was selected for the ${bucket.replace('_', ' ')} sleeve because it passed the strong-signal and high-confidence no-trade gate. The target strategy keeps ETFs near 35% of the portfolio, safer stocks near half of the stock sleeve, and aggressive stocks near the other half. Stop loss is set near ${stopLossPrice} and take profit near ${takeProfitPrice}.${contextNote}`,
+        reason: `${signal.symbol} was selected by the ${agentProfile.label} for the ${bucket.replace('_', ' ')} sleeve because it passed the strong-signal and high-confidence no-trade gate. ${agentProfile.description} Stop loss is set near ${stopLossPrice} and take profit near ${takeProfitPrice}.${contextNote}`,
         riskNotes: 'Cancel the plan if volatility expands, bucket allocation would exceed the strategy target, position allocation would exceed the max limit, or bracket levels become invalid.',
         journal,
       };
@@ -147,6 +155,7 @@ export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDeci
       bucketRemainingPercent,
       strongBuySignal,
       buyConfidence,
+      minBuyConfidence,
       strongTrimSignal,
       trimConfidence,
       ownedShares,
@@ -159,7 +168,7 @@ export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDeci
       llmInfluence,
       noTradeBiasApplied: true,
       executionPlan: 'No trade. Keep monitoring until signal strength and confidence clear the trade gate.',
-      checkpoints: [...baseCheckpoints, ...noTradeReasons],
+      checkpoints: [...baseCheckpoints, `agent=${agentProfile.id}`, ...noTradeReasons],
     });
 
     return {
@@ -238,6 +247,7 @@ function getNoTradeReasons(input: {
   bucketRemainingPercent: number | undefined;
   strongBuySignal: boolean;
   buyConfidence: number;
+  minBuyConfidence: number;
   strongTrimSignal: boolean;
   trimConfidence: number;
   ownedShares: number;
@@ -246,7 +256,8 @@ function getNoTradeReasons(input: {
 
   if (input.signal.signal === 'bullish') {
     if (!input.strongBuySignal) reasons.push('bullish setup is not strong enough.');
-    if (input.buyConfidence < MIN_BUY_CONFIDENCE) reasons.push(`confidence ${input.buyConfidence} is below buy threshold ${MIN_BUY_CONFIDENCE}.`);
+    if (input.buyConfidence < input.minBuyConfidence)
+      reasons.push(`confidence ${input.buyConfidence} is below buy threshold ${input.minBuyConfidence}.`);
     if (!input.selected) reasons.push('symbol was not a top ranked candidate in its sleeve.');
     if (input.nearMaxAllocation) reasons.push('position is near max allocation.');
     if (input.bucketRemainingPercent !== undefined && input.bucketRemainingPercent <= 0) reasons.push('strategy sleeve has no remaining allocation room.');

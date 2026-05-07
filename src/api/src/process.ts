@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { z } from 'zod';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
+type TradingAgentId = 'conservative' | 'neutral' | 'aggressive';
+
 const envSchema = z.object({
   NODE_ENV: z.string().default('development'),
   STAGE: z.string().default('dev'),
@@ -45,6 +47,9 @@ const envSchema = z.object({
 
   // AWS Secrets Manager
   ALPACA_SECRET_ARN: z.string().optional(),
+  ALPACA_CONSERVATIVE_SECRET_ARN: z.string().optional(),
+  ALPACA_NEUTRAL_SECRET_ARN: z.string().optional(),
+  ALPACA_AGGRESSIVE_SECRET_ARN: z.string().optional(),
   LLM_SECRET_ARN: z.string().optional(),
 });
 
@@ -63,14 +68,16 @@ function parseBoolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
-async function loadAlpacaSecretsFromAWS(secretArn: string): Promise<{
+type AlpacaSecrets = {
   ALPACA_API_KEY: string;
   ALPACA_SECRET_KEY: string;
   ALPACA_BASE_URL?: string;
   ALPACA_DATA_URL?: string;
   ALPACA_DATA_FEED?: string;
   ALPACA_PAPER?: string;
-}> {
+};
+
+async function loadAlpacaSecretsFromAWS(secretArn: string): Promise<AlpacaSecrets> {
   if (secretsCache[secretArn]) {
     return secretsCache[secretArn];
   }
@@ -93,6 +100,12 @@ async function loadAlpacaSecretsFromAWS(secretArn: string): Promise<{
     console.error(`[process.ts] ❌ Failed to load Alpaca secrets from AWS:`, error);
     throw error;
   }
+}
+
+function getAlpacaSecretArnForAgent(env: z.infer<typeof envSchema>, agentId: TradingAgentId) {
+  if (agentId === 'conservative') return env.ALPACA_CONSERVATIVE_SECRET_ARN ?? env.ALPACA_SECRET_ARN;
+  if (agentId === 'aggressive') return env.ALPACA_AGGRESSIVE_SECRET_ARN ?? env.ALPACA_SECRET_ARN;
+  return env.ALPACA_NEUTRAL_SECRET_ARN ?? env.ALPACA_SECRET_ARN;
 }
 
 async function loadLlmSecretsFromAWS(secretArn: string): Promise<{
@@ -126,7 +139,7 @@ async function loadLlmSecretsFromAWS(secretArn: string): Promise<{
   }
 }
 
-export async function loadConfig() {
+export async function loadConfig(agentId: TradingAgentId = 'neutral') {
   const env = envSchema.parse(process.env);
 
   const stage = env.STAGE.toLowerCase();
@@ -152,9 +165,11 @@ export async function loadConfig() {
   let ALPACA_DATA_FEED = env.ALPACA_DATA_FEED;
   let ALPACA_PAPER = env.ALPACA_PAPER;
 
-  if (env.ALPACA_SECRET_ARN && process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  const ALPACA_SECRET_ARN = getAlpacaSecretArnForAgent(env, agentId);
+
+  if (ALPACA_SECRET_ARN && process.env.AWS_LAMBDA_FUNCTION_NAME) {
     try {
-      const secrets = await loadAlpacaSecretsFromAWS(env.ALPACA_SECRET_ARN);
+      const secrets = await loadAlpacaSecretsFromAWS(ALPACA_SECRET_ARN);
       ALPACA_API_KEY = secrets.ALPACA_API_KEY || ALPACA_API_KEY;
       ALPACA_SECRET_KEY = secrets.ALPACA_SECRET_KEY || ALPACA_SECRET_KEY;
       ALPACA_BASE_URL = secrets.ALPACA_BASE_URL || ALPACA_BASE_URL;
@@ -162,7 +177,7 @@ export async function loadConfig() {
       ALPACA_DATA_FEED = secrets.ALPACA_DATA_FEED || ALPACA_DATA_FEED;
       ALPACA_PAPER = secrets.ALPACA_PAPER || ALPACA_PAPER;
     } catch (error) {
-      console.warn(`[process.ts] ⚠️  Failed to load Alpaca secrets from AWS, using environment variables`);
+      console.warn(`[process.ts] ⚠️  Failed to load ${agentId} Alpaca secrets from AWS, using environment variables`);
     }
   }
 
@@ -248,7 +263,7 @@ export async function loadConfig() {
       `🌎 Region: ${REGION}`,
       `🧩 Table: ${config.TABLE_NAME}`,
       `🪣 Bucket: ${config.BUCKET_NAME}`,
-      `📈 Alpaca: ${config.ALPACA_API_KEY ? 'configured' : 'not configured'} (${config.ALPACA_PAPER ? 'paper' : 'live'})`,
+      `📈 Alpaca ${agentId}: ${config.ALPACA_API_KEY ? 'configured' : 'not configured'} (${config.ALPACA_PAPER ? 'paper' : 'live'})`,
       `🧠 LLM Market Context: ${config.LLM_MARKET_CONTEXT_ENABLED ? 'enabled' : 'disabled'} ${config.LLM_API_KEY ? '(key configured)' : '(key not configured)'} ${config.LLM_MODEL ? `(model ${config.LLM_MODEL})` : '(model missing)'}`,
       `🌐 Web URL: ${config.WEB_URL}`,
       `🚀 Port: ${config.PORT}`,
@@ -262,13 +277,13 @@ export async function loadConfig() {
 }
 
 // Export a singleton instance (async)
-let configPromise: Promise<any> | null = null;
+const configPromises = new Map<TradingAgentId, Promise<any>>();
 
-export function getConfig() {
-  if (!configPromise) {
-    configPromise = loadConfig();
+export function getConfig(agentId: TradingAgentId = 'neutral') {
+  if (!configPromises.has(agentId)) {
+    configPromises.set(agentId, loadConfig(agentId));
   }
-  return configPromise;
+  return configPromises.get(agentId)!;
 }
 
 // For backwards compatibility, export a synchronous version for local development
@@ -299,6 +314,9 @@ export const config = (() => {
     ALPACA_DATA_FEED: env.ALPACA_DATA_FEED,
     ALPACA_PAPER: env.ALPACA_PAPER === 'true',
     ALPACA_SECRET_ARN: env.ALPACA_SECRET_ARN,
+    ALPACA_CONSERVATIVE_SECRET_ARN: env.ALPACA_CONSERVATIVE_SECRET_ARN,
+    ALPACA_NEUTRAL_SECRET_ARN: env.ALPACA_NEUTRAL_SECRET_ARN,
+    ALPACA_AGGRESSIVE_SECRET_ARN: env.ALPACA_AGGRESSIVE_SECRET_ARN,
     LLM_PROVIDER: env.LLM_PROVIDER,
     LLM_API_KEY: env.LLM_API_KEY ?? '',
     LLM_BASE_URL: env.LLM_BASE_URL,

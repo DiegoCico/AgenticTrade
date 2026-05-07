@@ -1,8 +1,8 @@
 # AgenticTrade
 
-AgenticTrade is an AI-assisted paper trading dashboard. The frontend shows portfolio performance, current positions, AI trade decisions, and planned buy/sell triggers. The backend exposes a tRPC API with a controlled trading pipeline that evaluates market snapshots, calculates signals, asks an AI decision layer for actions, validates those actions through risk rules, and records the resulting plans or trades.
+AgenticTrade is an AI-assisted paper trading dashboard. The frontend shows portfolio performance, current positions, AI trade decisions, and planned buy/sell triggers for three selectable trading agents: Conservative, Neutral, and Aggressive. The backend exposes a tRPC API with a controlled trading pipeline that evaluates market snapshots, calculates signals, asks an AI decision layer for actions, validates those actions through risk rules, and records the resulting plans or trades.
 
-The current implementation is built for Alpaca paper trading in deployed environments. Demo data is only used when `DEMO_MODE=true`; beta/prod deployments disable demo mode and refuse to run the trading pipeline if live Alpaca market data is unavailable.
+The current implementation is built for Alpaca paper trading in deployed environments. Each agent can use its own Alpaca paper account and Secrets Manager secret. Demo data is only used when `DEMO_MODE=true`; beta/prod deployments disable demo mode and refuse to run the trading pipeline if live Alpaca market data is unavailable.
 
 ## Project Structure
 
@@ -24,6 +24,8 @@ Frontend tabs:
 
 The dashboard refreshes backend data every 10 seconds for 5 minutes after page load. After that, live updates pause and the user must refresh the page to start another polling window. Position and watchlist rows open the symbol's TradingView chart in a new tab.
 
+The header trading-agent selector controls which backend account is loaded. Conservative, Neutral, and Aggressive each have separate current positions, decisions, trade plans, executed trades, and Alpaca credentials. Neutral is the default and is also the scheduled trading agent.
+
 Backend pipeline:
 
 ```txt
@@ -35,6 +37,12 @@ Market snapshot
   -> Trade planner / Alpaca paper order submitter
   -> Decision log
 ```
+
+Agent profiles:
+
+- `Conservative Agent`: prioritizes ETFs, dividend ETFs, and defensive high-dividend stocks with smaller trades and tighter volatility limits.
+- `Neutral Agent`: preserves the previous balanced sleeve targets.
+- `Aggressive Agent`: allocates more capacity to aggressive-stock candidates and uses shorter-term bracket levels for 1-7 day style trades.
 
 Infrastructure:
 
@@ -52,7 +60,7 @@ Infrastructure:
 - npm
 - AWS CLI configured for deployment
 - AWS CDK bootstrap completed for the target account/region
-- Alpaca paper trading key/secret for live backend integration work
+- Alpaca paper trading key/secret pairs for the Conservative, Neutral, and Aggressive accounts
 
 ## Install
 
@@ -125,6 +133,8 @@ ALPACA_DATA_URL=https://data.alpaca.markets
 ALPACA_PAPER=true
 ```
 
+Local development uses the same environment credentials for all agents unless you run in Lambda with the per-agent Secrets Manager ARNs below.
+
 LLM market-context configuration:
 
 ```txt
@@ -137,10 +147,12 @@ LLM_MARKET_CONTEXT_ENABLED=true
 
 If `LLM_MARKET_CONTEXT_ENABLED` is omitted, the API auto-enables LLM market context when a key and model are configured. Set it to `false` only when you explicitly want deterministic fallback market context.
 
-Deployed environments use the CDK-created Alpaca secret:
+Deployed environments use CDK-created Alpaca secrets:
 
 ```txt
-agentictrade-api/{stage}/alpaca
+agentictrade-api/{stage}/alpaca/conservative
+agentictrade-api/{stage}/alpaca/neutral
+agentictrade-api/{stage}/alpaca/aggressive
 ```
 
 Expected secret JSON:
@@ -155,6 +167,8 @@ Expected secret JSON:
   "ALPACA_PAPER": "true"
 }
 ```
+
+Do not hardcode real Alpaca keys in CDK source. Deploy the placeholder secrets, then update each secret value directly in AWS Secrets Manager.
 
 ## Manual Lambda Test Event
 
@@ -185,7 +199,7 @@ To run the trading evaluation manually from the AWS Lambda console, use the tRPC
   "pathParameters": {
     "proxy": "aiTrading.evaluate"
   },
-  "body": "{\"json\":{}}",
+  "body": "{\"json\":{\"agentId\":\"neutral\"}}",
   "isBase64Encoded": false
 }
 ```

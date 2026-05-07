@@ -1,6 +1,6 @@
 # AgenticTrade API
 
-The API is a TypeScript tRPC backend that can run locally with Express or deploy as an AWS Lambda handler behind API Gateway. Its main responsibility right now is the AI trading pipeline.
+The API is a TypeScript tRPC backend that can run locally with Express or deploy as an AWS Lambda handler behind API Gateway. Its main responsibility right now is the AI trading pipeline for three trading agents: Conservative, Neutral, and Aggressive.
 
 ## Runtime
 
@@ -31,7 +31,7 @@ src/api/
       tradingRepository.ts DynamoDB persistence and history reads
       types.ts            pipeline types
     handler.ts            Lambda entry
-    scheduled-trading.ts  EventBridge Scheduler entry for daily market evaluation
+    scheduled-trading.ts  EventBridge Scheduler entry for scheduled market evaluation
     server.ts             local Express entry
     process.ts            environment and Secrets Manager config
   TRADING_PIPELINE.md     detailed pipeline explanation
@@ -52,17 +52,21 @@ Procedures:
 | `aiTrading.getTradePlans` | query | Returns planned/blocked trade plans |
 | `aiTrading.getDecisions` | query | Returns decision log entries |
 | `aiTrading.getTradeHistory` | query | Returns a frontend-ready timeline of executed trades, plans, holds, and AI thoughts |
+| `aiTrading.getAgents` | query | Returns the supported trading agents and default agent id |
 | `aiTrading.evaluate` | mutation | Runs the trading pipeline for requested symbols or the AI-managed strategy universe |
 
 Example `evaluate` input:
 
 ```json
 {
+  "agentId": "neutral",
   "symbols": ["NVDA", "MSFT", "TSLA"]
 }
 ```
 
-If `symbols` is omitted, the API evaluates the AI-managed strategy universe plus current holdings. The strategy targets 30-40% ETFs, with the stock sleeve split evenly between safer and more aggressive candidates selected by the AI policy.
+Most read procedures accept an optional `agentId` of `conservative`, `neutral`, or `aggressive`. If omitted, the backend uses `neutral`. Each agent loads its own Alpaca account and has isolated runtime decisions, trade plans, executed trades, and trade-history account id.
+
+If `symbols` is omitted, the API evaluates the AI-managed strategy universe plus current holdings for the selected agent. Neutral keeps the previous balanced targets; Conservative biases toward ETF/dividend/high-dividend candidates; Aggressive biases toward short-term aggressive-stock purchases.
 
 ## Trading Pipeline
 
@@ -81,7 +85,7 @@ getMarketSnapshot()
 
 Current behavior:
 
-- Loads Alpaca account, positions, and market bars when credentials are configured.
+- Loads the selected agent's Alpaca account, positions, and market bars when credentials are configured.
 - Uses demo data only when `DEMO_MODE=true`; beta/prod disable demo mode and refuse to run if Alpaca market data is unavailable.
 - Uses the default AI-managed universe when symbols are not supplied.
 - Adds an LLM-ready market-context pass before final decisions.
@@ -89,6 +93,8 @@ Current behavior:
 - Includes stop-loss and take-profit prices when the AI decision calls for them.
 - Creates trade plans and submits approved paper buy plans to Alpaca as bracket orders.
 - Logs every recommendation with prompt version, model name, input snapshot, AI output, and risk review.
+- Keeps in-memory fallback decisions, trade plans, and executed trades isolated per agent.
+- Retries Alpaca and LLM 429 rate-limit responses up to 4 total attempts with a randomized 1-10 second delay before each retry.
 
 Read `TRADING_PIPELINE.md` for the deeper design notes and the expected Alpaca integration path.
 
@@ -99,10 +105,10 @@ Read `AI_PROMPTS_AND_FLOW.md` for the current LLM prompt, fallback behavior, det
 The CDK API stack deploys a separate scheduled Lambda that runs `runTradingPipeline()` automatically:
 
 ```txt
-Monday-Friday at 10:00 AM America/New_York
+Monday-Friday at 10:00 AM, 12:30 PM, and 3:00 PM America/New_York
 ```
 
-That is 30 minutes after the regular U.S. market open. Manual evaluations through `aiTrading.evaluate` and scheduled evaluations use the same pipeline code.
+Scheduled evaluation runs the full pipeline independently for Conservative, Neutral, and Aggressive. Manual evaluations through `aiTrading.evaluate` and scheduled evaluations use the same pipeline code. If one scheduled agent fails after retries, the other agents still complete and the Lambda response reports the failed agent.
 
 ## DynamoDB Persistence
 
@@ -133,7 +139,7 @@ Trading evaluations now persist portfolio snapshots, market snapshots, AI decisi
 }
 ```
 
-The route accepts optional `accountId`, `symbol`, `from`, `to`, `limit`, and `cursor` fields.
+The route accepts optional `agentId`, `accountId`, `symbol`, `from`, `to`, `limit`, and `cursor` fields. If `accountId` is omitted, the route resolves it from the selected agent's current Alpaca portfolio.
 
 ## Environment
 
@@ -165,11 +171,14 @@ For Lambda, CDK injects:
 
 ```txt
 ALPACA_SECRET_ARN=...
+ALPACA_CONSERVATIVE_SECRET_ARN=...
+ALPACA_NEUTRAL_SECRET_ARN=...
+ALPACA_AGGRESSIVE_SECRET_ARN=...
 LLM_SECRET_ARN=...
 DEMO_MODE=false
 ```
 
-`process.ts` loads Alpaca and LLM credentials from AWS Secrets Manager when running in Lambda and falls back to environment variables for local development.
+`process.ts` loads the selected agent's Alpaca credentials and the LLM credentials from AWS Secrets Manager when running in Lambda. Local development falls back to the single `.env` Alpaca credential pair for all agents.
 
 ## Commands
 
@@ -211,7 +220,7 @@ Use this event in the AWS Lambda console to manually run `aiTrading.evaluate`:
   "pathParameters": {
     "proxy": "aiTrading.evaluate"
   },
-  "body": "{\"json\":{}}",
+  "body": "{\"json\":{\"agentId\":\"neutral\"}}",
   "isBase64Encoded": false
 }
 ```
@@ -221,3 +230,4 @@ Use this event in the AWS Lambda console to manually run `aiTrading.evaluate`:
 - The current `protectedProcedure` is a pass-through alias while the trading API is still early-stage.
 - Alpaca order submission is implemented for approved paper buy plans through bracket market orders.
 - The final trade-decision stage is deterministic; the LLM currently provides market context only.
+- The scheduled Lambda evaluates Conservative, Neutral, and Aggressive independently on each scheduled invocation.

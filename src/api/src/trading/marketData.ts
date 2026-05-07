@@ -1,16 +1,18 @@
 import { getAlpacaMarketSnapshot, getDemoMarketSnapshot, getLastAlpacaMarketDataFailure } from './alpacaClient';
 import { getConfig } from '../process';
 import type { MarketSnapshot } from './types';
+import type { TradingAgentId } from './strategy';
 
-export async function getMarketSnapshot(symbols: string[]): Promise<MarketSnapshot> {
+export async function getMarketSnapshot(symbols: string[], agentId: TradingAgentId = 'neutral'): Promise<MarketSnapshot> {
   console.log('[marketData] getMarketSnapshot input', {
     symbols,
+    agent: agentId,
   });
 
-  const alpacaSnapshot = await getAlpacaMarketSnapshot(symbols);
+  const alpacaSnapshot = await getAlpacaMarketSnapshot(symbols, agentId);
   if (alpacaSnapshot) return alpacaSnapshot;
 
-  const config = await getConfig();
+  const config = await getConfig(agentId);
   if (!config.DEMO_MODE) {
     const reason = getLastAlpacaMarketDataFailure() ?? 'No detailed Alpaca failure reason was recorded.';
     throw new Error(
@@ -23,6 +25,7 @@ export async function getMarketSnapshot(symbols: string[]): Promise<MarketSnapsh
     snapshotId: demoSnapshot.snapshotId,
     symbols,
     candles: demoSnapshot.candles.length,
+    agent: agentId,
   });
 
   return demoSnapshot;

@@ -1,4 +1,11 @@
 export type Theme = "light" | "dark";
+export type TradingAgentId = "conservative" | "neutral" | "aggressive";
+
+export type TradingAgentOption = {
+  id: TradingAgentId;
+  label: string;
+  description: string;
+};
 
 export type PerformancePoint = {
   label: string;

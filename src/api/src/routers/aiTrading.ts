@@ -1,11 +1,23 @@
 import { z } from 'zod';
 import { publicProcedure, router } from './trpc';
 import { getTradingState, runTradingPipeline } from '../trading/pipeline';
+import { DEFAULT_TRADING_AGENT_ID, TRADING_AGENT_PROFILES } from '../trading/strategy';
 import { getTradeHistory } from '../trading/tradingRepository';
 import type { TradeHistoryItem, TradeHistoryResult } from '../trading/types';
 
-async function getInMemoryTradeHistory(): Promise<TradeHistoryResult> {
-  const state = await getTradingState();
+const tradingAgentSchema = z.enum(['conservative', 'neutral', 'aggressive']);
+const agentInputSchema = z
+  .object({
+    agentId: tradingAgentSchema.optional(),
+  })
+  .optional();
+
+function selectedAgent(input: { agentId?: z.infer<typeof tradingAgentSchema> } | undefined) {
+  return input?.agentId ?? DEFAULT_TRADING_AGENT_ID;
+}
+
+async function getInMemoryTradeHistory(agentId = DEFAULT_TRADING_AGENT_ID): Promise<TradeHistoryResult> {
+  const state = await getTradingState(agentId);
   const accountId = state.portfolio.accountId;
   const items: TradeHistoryItem[] = [
     ...state.executedTrades.map((trade) => {
@@ -124,11 +136,13 @@ async function getInMemoryTradeHistory(): Promise<TradeHistoryResult> {
 }
 
 export const aiTradingRouter = router({
-  getState: publicProcedure.query(() => getTradingState()),
-  getPortfolio: publicProcedure.query(async () => (await getTradingState()).portfolio),
-  getPositions: publicProcedure.query(async () => (await getTradingState()).portfolio.positions),
-  getTradePlans: publicProcedure.query(async () => (await getTradingState()).tradePlans),
-  getDecisions: publicProcedure.query(async () => (await getTradingState()).decisions),
+  getState: publicProcedure
+    .input(agentInputSchema)
+    .query(({ input }) => getTradingState(selectedAgent(input))),
+  getPortfolio: publicProcedure.input(agentInputSchema).query(async ({ input }) => (await getTradingState(selectedAgent(input))).portfolio),
+  getPositions: publicProcedure.input(agentInputSchema).query(async ({ input }) => (await getTradingState(selectedAgent(input))).portfolio.positions),
+  getTradePlans: publicProcedure.input(agentInputSchema).query(async ({ input }) => (await getTradingState(selectedAgent(input))).tradePlans),
+  getDecisions: publicProcedure.input(agentInputSchema).query(async ({ input }) => (await getTradingState(selectedAgent(input))).decisions),
   getTradeHistory: publicProcedure
     .input(
       z
@@ -139,17 +153,19 @@ export const aiTradingRouter = router({
           to: z.string().min(1).optional(),
           limit: z.number().int().positive().max(100).optional(),
           cursor: z.string().min(1).optional(),
+          agentId: tradingAgentSchema.optional(),
         })
         .optional(),
     )
     .query(async ({ input }) => {
       console.log('[aiTrading.getTradeHistory] input', input ?? {});
+      const { agentId: selectedAgentId = DEFAULT_TRADING_AGENT_ID, ...historyInput } = input ?? {};
 
       const resolvedInput = input?.accountId
-        ? input
+        ? historyInput
         : {
-            ...(input ?? {}),
-            accountId: (await getTradingState()).portfolio.accountId,
+            ...historyInput,
+            accountId: (await getTradingState(selectedAgentId)).portfolio.accountId,
           };
 
       try {
@@ -163,7 +179,7 @@ export const aiTradingRouter = router({
         return result;
       } catch (error) {
         console.warn('[aiTrading.getTradeHistory] Falling back to in-memory history', error);
-        const fallback = await getInMemoryTradeHistory();
+        const fallback = await getInMemoryTradeHistory(selectedAgentId);
         const symbol = resolvedInput?.symbol?.toUpperCase();
         const items = symbol ? fallback.items.filter((item) => item.symbol === symbol) : fallback.items;
 
@@ -182,11 +198,21 @@ export const aiTradingRouter = router({
       z
         .object({
           symbols: z.array(z.string().min(1)).optional(),
+          agentId: tradingAgentSchema.optional(),
         })
         .optional(),
     )
     .mutation(({ input }) => {
       console.log('[aiTrading.evaluate] input', input ?? {});
-      return runTradingPipeline({ symbols: input?.symbols });
+      const agentId = input?.agentId ?? DEFAULT_TRADING_AGENT_ID;
+      return runTradingPipeline({ symbols: input?.symbols, agentId });
     }),
+  getAgents: publicProcedure.query(() => ({
+    defaultAgentId: DEFAULT_TRADING_AGENT_ID,
+    agents: Object.values(TRADING_AGENT_PROFILES).map((profile) => ({
+      id: profile.id,
+      label: profile.label,
+      description: profile.description,
+    })),
+  })),
 });

@@ -36,6 +36,10 @@ export const STRATEGY_UNIVERSE: StrategySymbol[] = [
   { symbol: 'VYM', bucket: 'etf' },
   { symbol: 'HDV', bucket: 'etf' },
   { symbol: 'DGRO', bucket: 'etf' },
+  { symbol: 'NOBL', bucket: 'etf' },
+  { symbol: 'SDY', bucket: 'etf' },
+  { symbol: 'SPHD', bucket: 'etf' },
+  { symbol: 'USMV', bucket: 'etf' },
 
   // International ETFs
   { symbol: 'VXUS', bucket: 'etf' },
@@ -83,6 +87,12 @@ export const STRATEGY_UNIVERSE: StrategySymbol[] = [
   { symbol: 'IBM', bucket: 'safe_stock' },
   { symbol: 'TXN', bucket: 'safe_stock' },
   { symbol: 'AVGO', bucket: 'safe_stock' },
+  { symbol: 'CRM', bucket: 'safe_stock' },
+  { symbol: 'NOW', bucket: 'safe_stock' },
+  { symbol: 'ACN', bucket: 'safe_stock' },
+  { symbol: 'QCOM', bucket: 'safe_stock' },
+  { symbol: 'AMAT', bucket: 'safe_stock' },
+  { symbol: 'MU', bucket: 'safe_stock' },
 
   // Financial / Healthcare stable
   { symbol: 'JPM', bucket: 'safe_stock' },
@@ -93,6 +103,30 @@ export const STRATEGY_UNIVERSE: StrategySymbol[] = [
   { symbol: 'LLY', bucket: 'safe_stock' },
   { symbol: 'PFE', bucket: 'safe_stock' },
   { symbol: 'MRK', bucket: 'safe_stock' },
+  { symbol: 'TMO', bucket: 'safe_stock' },
+  { symbol: 'ABT', bucket: 'safe_stock' },
+  { symbol: 'ISRG', bucket: 'safe_stock' },
+  { symbol: 'CVS', bucket: 'safe_stock' },
+  { symbol: 'CI', bucket: 'safe_stock' },
+
+  // Dividend / income stocks
+  { symbol: 'ABBV', bucket: 'safe_stock' },
+  { symbol: 'T', bucket: 'safe_stock' },
+  { symbol: 'VZ', bucket: 'safe_stock' },
+  { symbol: 'PM', bucket: 'safe_stock' },
+  { symbol: 'O', bucket: 'safe_stock' },
+  { symbol: 'SO', bucket: 'safe_stock' },
+  { symbol: 'DUK', bucket: 'safe_stock' },
+  { symbol: 'XOM', bucket: 'safe_stock' },
+  { symbol: 'CVX', bucket: 'safe_stock' },
+  { symbol: 'MO', bucket: 'safe_stock' },
+  { symbol: 'KMB', bucket: 'safe_stock' },
+  { symbol: 'CL', bucket: 'safe_stock' },
+  { symbol: 'MMM', bucket: 'safe_stock' },
+  { symbol: 'LOW', bucket: 'safe_stock' },
+  { symbol: 'TGT', bucket: 'safe_stock' },
+  { symbol: 'NEE', bucket: 'safe_stock' },
+  { symbol: 'AEP', bucket: 'safe_stock' },
 
   // Aggressive / Growth
   { symbol: 'NVDA', bucket: 'aggressive_stock' },
@@ -114,12 +148,29 @@ export const STRATEGY_UNIVERSE: StrategySymbol[] = [
   { symbol: 'AFRM', bucket: 'aggressive_stock' },
   { symbol: 'UPST', bucket: 'aggressive_stock' },
   { symbol: 'AI', bucket: 'aggressive_stock' },
+  { symbol: 'SMCI', bucket: 'aggressive_stock' },
+  { symbol: 'ARM', bucket: 'aggressive_stock' },
+  { symbol: 'MRVL', bucket: 'aggressive_stock' },
+  { symbol: 'LRCX', bucket: 'aggressive_stock' },
+  { symbol: 'KLAC', bucket: 'aggressive_stock' },
+  { symbol: 'APP', bucket: 'aggressive_stock' },
+  { symbol: 'MDB', bucket: 'aggressive_stock' },
+  { symbol: 'OKTA', bucket: 'aggressive_stock' },
+  { symbol: 'PATH', bucket: 'aggressive_stock' },
+  { symbol: 'HOOD', bucket: 'aggressive_stock' },
+  { symbol: 'SOFI', bucket: 'aggressive_stock' },
+  { symbol: 'MSTR', bucket: 'aggressive_stock' },
+  { symbol: 'MARA', bucket: 'aggressive_stock' },
+  { symbol: 'RIOT', bucket: 'aggressive_stock' },
 
   // Biotech / high volatility
   { symbol: 'MRNA', bucket: 'aggressive_stock' },
   { symbol: 'BNTX', bucket: 'aggressive_stock' },
   { symbol: 'REGN', bucket: 'aggressive_stock' },
   { symbol: 'VRTX', bucket: 'aggressive_stock' },
+  { symbol: 'CRSP', bucket: 'aggressive_stock' },
+  { symbol: 'BEAM', bucket: 'aggressive_stock' },
+  { symbol: 'NTLA', bucket: 'aggressive_stock' },
 
   // International / Emerging growth
   { symbol: 'BABA', bucket: 'aggressive_stock' },
@@ -127,4 +178,7 @@ export const STRATEGY_UNIVERSE: StrategySymbol[] = [
   { symbol: 'XPEV', bucket: 'aggressive_stock' },
   { symbol: 'LI', bucket: 'aggressive_stock' },
   { symbol: 'TCEHY', bucket: 'aggressive_stock' },
+  { symbol: 'SE', bucket: 'aggressive_stock' },
+  { symbol: 'MELI', bucket: 'aggressive_stock' },
+  { symbol: 'PDD', bucket: 'aggressive_stock' },
 ];

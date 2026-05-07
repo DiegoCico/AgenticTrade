@@ -29,7 +29,8 @@
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -50,6 +51,7 @@ button {
 .icon-button,
 .brand-logo-chip,
 .top-tabs,
+.account-select-wrap,
 .account-pill,
 .header-actions {
   align-items: center;
@@ -141,6 +143,33 @@ button {
   min-height: 42px;
   padding: 0 14px;
   white-space: nowrap;
+}
+
+.account-select-wrap {
+  position: relative;
+}
+
+.account-select {
+  appearance: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  min-height: 42px;
+  min-width: 190px;
+  padding: 0 34px 0 14px;
+}
+
+.account-select-wrap::after {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--muted);
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .header-actions {
@@ -1003,6 +1032,10 @@ h2 {
     justify-self: end;
   }
 
+  .account-pill {
+    display: none;
+  }
+
   .plans-grid {
     grid-template-columns: 1fr;
   }
@@ -1089,6 +1122,10 @@ h2 {
   .top-tabs button {
     min-width: max-content;
     padding: 0 12px;
+  }
+
+  .account-select {
+    min-width: 154px;
   }
 
   .account-pill {

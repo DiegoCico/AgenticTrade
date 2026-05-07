@@ -1,6 +1,7 @@
 import { getConfig } from '../process';
 import type { MarketContext, MarketSnapshot, PortfolioState, TradingSignal } from './types';
 import { getStrategyBucket, rankSignalsForStrategy } from './strategy';
+import { RateLimitError, withRateLimitRetry } from './rateLimitRetry';
 
 type MarketContextInput = {
   portfolio: PortfolioState;
@@ -190,32 +191,45 @@ export async function buildMarketContext(input: MarketContextInput): Promise<Mar
   }
 
   try {
-    const response = await fetch(config.LLM_BASE_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.LLM_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: config.LLM_MODEL,
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a market-context analyst for a paper-trading AI. You summarize data, but you do not execute trades.',
-          },
-          {
-            role: 'user',
-            content: buildPrompt(input),
-          },
-        ],
-      }),
-    });
+    const response = await withRateLimitRetry('llm:market-context', async (attempt) => {
+      const llmResponse = await fetch(config.LLM_BASE_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.LLM_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: config.LLM_MODEL,
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a market-context analyst for a paper-trading AI. You summarize data, but you do not execute trades.',
+            },
+            {
+              role: 'user',
+              content: buildPrompt(input),
+            },
+          ],
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`LLM request failed with ${response.status}`);
-    }
+      if (llmResponse.status === 429) {
+        const bodyPreview = (await llmResponse.text()).slice(0, 500);
+        throw new RateLimitError(`LLM request rate limited with ${llmResponse.status}`, {
+          status: llmResponse.status,
+          attempt,
+          bodyPreview,
+        });
+      }
+
+      if (!llmResponse.ok) {
+        throw new Error(`LLM request failed with ${llmResponse.status}`);
+      }
+
+      return llmResponse;
+    });
 
     const payload: any = await response.json();
     const content = payload?.choices?.[0]?.message?.content;

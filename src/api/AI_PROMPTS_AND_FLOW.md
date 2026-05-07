@@ -36,15 +36,17 @@ src/api/src/trading/alpacaClient.ts
 
 This loads candles for the requested symbols. The API first tries Alpaca market data when Alpaca credentials are configured. If Alpaca is unavailable, it falls back to demo market data only when `DEMO_MODE=true`. In beta/prod, demo mode is disabled and the API throws instead of using fixture candles.
 
-If the caller does not provide symbols, `pipeline.ts` now uses the AI-managed strategy universe from `STRATEGY_UNIVERSE.ts` plus any current holdings. That makes the normal flow AI-selected instead of user-selected.
+If the caller does not provide symbols, `pipeline.ts` now uses the AI-managed strategy universe from `STRATEGY_UNIVERSE.ts` plus any current holdings. That makes the normal flow AI-selected instead of user-selected. The optional `agentId` selects `conservative`, `neutral`, or `aggressive`; omitted calls default to `neutral`.
 
-Current strategy targets:
+Neutral strategy targets:
 
 - ETFs: 35% target allocation, with a 30-40% intended range
 - Safer stocks: 32.5% target allocation
 - Aggressive stocks: 32.5% target allocation
 
-The current strategy universe lives in `src/api/src/trading/STRATEGY_UNIVERSE.ts` and is grouped into ETF, safer-stock, and aggressive-stock buckets.
+Conservative strategy targets are 55% ETFs, 35% safer stocks, and 10% aggressive stocks, with smaller trade sizes and a lower volatility ceiling. Aggressive strategy targets are 20% ETFs, 25% safer stocks, and 55% aggressive stocks, with shorter-term bracket exits for 1-7 day style trades.
+
+The current strategy universe lives in `src/api/src/trading/STRATEGY_UNIVERSE.ts` and is grouped into ETF, safer-stock, and aggressive-stock buckets. The safer-stock bucket includes dividend/high-dividend candidates for the Conservative Agent.
 
 Alpaca market data request:
 
@@ -80,7 +82,7 @@ File:
 src/api/src/trading/alpacaClient.ts
 ```
 
-Before building the AI prompt, the pipeline loads the live/paper Alpaca account and open positions:
+Before building the AI prompt, the pipeline loads the selected agent's live/paper Alpaca account and open positions:
 
 ```txt
 GET {ALPACA_BASE_URL}/v2/account
@@ -119,7 +121,7 @@ That portfolio object is passed into:
 - `validateDecision()`
 - `persistPipelineRun()`
 
-So the AI market-context prompt sees what stocks the Alpaca account currently has, how many shares it owns, the average cost, current price, allocation, cash, buying power, and total portfolio value.
+So the AI market-context prompt sees what stocks the selected Alpaca account currently has, how many shares it owns, the average cost, current price, allocation, cash, buying power, and total portfolio value.
 
 If Alpaca credentials are missing or Alpaca returns an error, the pipeline logs the failure. It uses `demoPortfolio` only when `DEMO_MODE=true`; otherwise the request fails so beta/prod do not silently evaluate or trade on demo data.
 
@@ -168,6 +170,8 @@ LLM_MODEL=...
 ```
 
 If `LLM_MARKET_CONTEXT_ENABLED` is omitted, the config loader enables the LLM automatically when a key and model are configured. If the LLM is explicitly disabled, missing required values, or the request fails, the backend uses `fallbackMarketContext()` instead.
+
+LLM 429 rate-limit responses are retried up to 4 total attempts. Each retry waits a randomized 1-10 seconds before trying again. If all attempts fail, the backend uses `fallbackMarketContext()` for that agent.
 
 ## Current LLM Request
 
@@ -563,13 +567,13 @@ Current scheduled AI usage is low because the backend makes at most one LLM call
 The CDK scheduler runs:
 
 ```txt
-Monday-Friday at 10:00 AM America/New_York
+Monday-Friday at 10:00 AM, 12:30 PM, and 3:00 PM America/New_York
 ```
 
 So the default production cadence is:
 
 ```txt
-1 scheduled LLM call per market weekday
+9 scheduled LLM calls per market weekday
 ```
 
 Manual calls to `aiTrading.evaluate` add one extra market-context LLM call each time.
@@ -597,7 +601,7 @@ evaluations_per_day = scheduled_runs + manual_evaluate_calls
 For the current app:
 
 ```txt
-scheduled_runs = 1 on market weekdays
+scheduled_runs = 9 on market weekdays
 scheduled_runs = 0 on weekends
 ```
 
@@ -629,15 +633,15 @@ output_price_per_1m_tokens = $1.60
 Example estimate:
 
 ```txt
-evaluations_per_day = 1
+evaluations_per_day = 9
 input_tokens = 4,000
 output_tokens = 600
 input_price_per_1m_tokens = $0.40
 output_price_per_1m_tokens = $1.60
 
 daily_cost =
-  1 * ((4,000 / 1,000,000) * 0.40 + (600 / 1,000,000) * 1.60)
-  = $0.00256 per market day
+  9 * ((4,000 / 1,000,000) * 0.40 + (600 / 1,000,000) * 1.60)
+  = $0.02304 per market day
 ```
 
 That is less than one cent per scheduled market day.
@@ -648,20 +652,20 @@ Using the rough token range above:
 low estimate:
   input_tokens = 2,000
   output_tokens = 300
-  daily_cost = ((2,000 / 1,000,000) * 0.40 + (300 / 1,000,000) * 1.60)
-  daily_cost = $0.00128
+  daily_cost = 9 * ((2,000 / 1,000,000) * 0.40 + (300 / 1,000,000) * 1.60)
+  daily_cost = $0.01152
 
 high estimate:
   input_tokens = 5,000
   output_tokens = 800
-  daily_cost = ((5,000 / 1,000,000) * 0.40 + (800 / 1,000,000) * 1.60)
-  daily_cost = $0.00328
+  daily_cost = 9 * ((5,000 / 1,000,000) * 0.40 + (800 / 1,000,000) * 1.60)
+  daily_cost = $0.02952
 ```
 
 So the current scheduled market-context LLM usage with `gpt-4.1-mini` is roughly:
 
 ```txt
-$0.00128 to $0.00328 per market day
+$0.01152 to $0.02952 per market day
 ```
 
 ### Monthly Estimate
@@ -675,17 +679,17 @@ monthly_scheduled_cost = daily_cost * 21
 Using the middle example above:
 
 ```txt
-$0.00256 * 21 = $0.05376 per month
+$0.02304 * 21 = $0.48384 per month
 ```
 
 Using the rough low/high range:
 
 ```txt
 low monthly estimate:
-  $0.00128 * 21 = $0.02688 per month
+  $0.01152 * 21 = $0.24192 per month
 
 high monthly estimate:
-  $0.00328 * 21 = $0.06888 per month
+  $0.02952 * 21 = $0.61992 per month
 ```
 
 Manual evaluations increase cost linearly:

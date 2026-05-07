@@ -1,6 +1,6 @@
 # AgenticTrade Frontend
 
-The frontend is a Vite + React dashboard for watching how the AI trading system is performing. It loads portfolio, position, plan, and decision data from the backend tRPC API.
+The frontend is a Vite + React dashboard for watching how the AI trading system is performing. It loads portfolio, position, plan, and decision data from the backend tRPC API for the selected trading agent.
 
 ## Stack
 
@@ -24,6 +24,14 @@ The app uses top-level tabs in `AppHeader`.
 | `Decisions` | Recent AI decisions with date/time context and detail dialogs |
 
 Position and watchlist rows open the symbol's TradingView chart in a new tab.
+
+The header includes a trading-agent dropdown:
+
+- Conservative Agent
+- Neutral Agent
+- Aggressive Agent
+
+Changing the selected agent reloads the dashboard from that agent's backend account. Current positions, trade plans, decisions, executed trades, and trade history are all scoped by the selected agent.
 
 ## Directory Structure
 
@@ -69,7 +77,7 @@ It calls:
 - `aiTrading.getState`
 - `aiTrading.getTradeHistory`
 
-`portfolio.json` remains in the worktree as a development fixture/reference, but the app no longer uses it as the primary data source. If the backend returns no history, the UI renders empty lists instead of inventing fixture trades.
+Both calls pass the selected `agentId`. `portfolio.json` remains in the worktree as a development fixture/reference, but the app no longer uses it as the primary data source. If the backend returns no history, the UI renders empty lists instead of inventing fixture trades.
 
 ## Development
 
@@ -117,6 +125,8 @@ It calls:
 
 - `aiTrading.getState`
 - `aiTrading.getTradeHistory`
+
+with the selected `agentId`.
 
 Local development defaults to:
 

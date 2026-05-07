@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { loadTradingDashboard, emptyPortfolioData } from "./api/tradingApi";
+import { defaultTradingAgentId, emptyPortfolioData, loadTradingDashboard, tradingAgentOptions } from "./api/tradingApi";
 import { AppHeader } from "./components/layout/AppHeader";
 import { PortfolioDashboard } from "./pages/PortfolioDashboard";
 import { TradePlans } from "./components/dashboard/TradePlans";
 import { RecentDecisions } from "./components/dashboard/RecentDecisions";
 import { CurrentPositions } from "./components/dashboard/CurrentPositions";
-import type { PortfolioData, Theme } from "./types/portfolio";
+import type { PortfolioData, Theme, TradingAgentId } from "./types/portfolio";
 import "./App.css";
 
 const PORTFOLIO_REFRESH_INTERVAL_MS = 10_000;
@@ -17,6 +17,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isPollingExpired, setIsPollingExpired] = useState(false);
   const [theme, setTheme] = useState<Theme>("dark");
+  const [selectedAgentId, setSelectedAgentId] = useState<TradingAgentId>(defaultTradingAgentId);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,7 +34,7 @@ export default function App() {
       }
 
       try {
-        const nextData = await loadTradingDashboard();
+        const nextData = await loadTradingDashboard(selectedAgentId);
         console.log("[frontend:App] backend data loaded", nextData);
 
         if (!cancelled) {
@@ -73,7 +74,7 @@ export default function App() {
       window.clearInterval(refreshInterval);
       window.clearTimeout(refreshTimeout);
     };
-  }, []);
+  }, [selectedAgentId]);
 
   console.log("[frontend:App] render", {
     activeTab,
@@ -86,9 +87,11 @@ export default function App() {
   return (
     <main className="app-shell" data-theme={theme}>
       <AppHeader
-        accountMode={data.account.mode}
+        agents={tradingAgentOptions}
+        selectedAgentId={selectedAgentId}
         activeTab={activeTab}
         theme={theme}
+        onSelectAgent={setSelectedAgentId}
         onSelectTab={setActiveTab}
         onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
       />

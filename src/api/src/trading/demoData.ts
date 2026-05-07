@@ -1,3 +1,4 @@
+import type { TradingAgentId } from './strategy';
 import type { PortfolioState, MarketSnapshot, TradePlan, ExecutedTrade, DecisionLogEntry } from './types';
 
 export const demoPortfolio: PortfolioState = {
@@ -98,3 +99,39 @@ export const demoMarketSnapshot: MarketSnapshot = {
 export const tradePlans: TradePlan[] = [];
 export const executedTrades: ExecutedTrade[] = [];
 export const decisionLog: DecisionLogEntry[] = [];
+
+export type RuntimeTradingState = {
+  tradePlans: TradePlan[];
+  executedTrades: ExecutedTrade[];
+  decisionLog: DecisionLogEntry[];
+};
+
+const runtimeTradingStateByAgent: Record<TradingAgentId, RuntimeTradingState> = {
+  conservative: {
+    tradePlans: [],
+    executedTrades: [],
+    decisionLog: [],
+  },
+  neutral: {
+    tradePlans,
+    executedTrades,
+    decisionLog,
+  },
+  aggressive: {
+    tradePlans: [],
+    executedTrades: [],
+    decisionLog: [],
+  },
+};
+
+export function getRuntimeTradingState(agentId: TradingAgentId): RuntimeTradingState {
+  return runtimeTradingStateByAgent[agentId] ?? runtimeTradingStateByAgent.neutral;
+}
+
+export function getDemoPortfolioForAgent(agentId: TradingAgentId): PortfolioState {
+  return {
+    ...demoPortfolio,
+    accountId: `paper-agentictrade-${agentId}`,
+    positions: demoPortfolio.positions.map((position) => ({ ...position })),
+  };
+}

@@ -2,6 +2,8 @@ import { randomUUID } from 'crypto';
 import { getConfig } from '../process';
 import { demoMarketSnapshot, demoPortfolio } from './demoData';
 import type { ExecutedTrade, MarketCandle, MarketSnapshot, PortfolioState, Position, TradePlan } from './types';
+import type { TradingAgentId } from './strategy';
+import { RateLimitError, withRateLimitRetry } from './rateLimitRetry';
 
 type AlpacaAccount = {
   id?: string;
@@ -86,27 +88,40 @@ async function alpacaFetch<T>(
     paper: config.ALPACA_PAPER,
   });
 
-  const { headers: initHeaders, ...restInit } = init ?? {};
-  const response = await fetch(url, {
-    method: 'GET',
-    ...restInit,
-    headers: {
-      ...alpacaHeaders(config),
-      ...initHeaders,
-    },
-  });
+  const text = await withRateLimitRetry(`alpaca:${path}`, async (attempt) => {
+    const { headers: initHeaders, ...restInit } = init ?? {};
+    const response = await fetch(url, {
+      method: 'GET',
+      ...restInit,
+      headers: {
+        ...alpacaHeaders(config),
+        ...initHeaders,
+      },
+    });
 
-  const text = await response.text();
-  console.log('[alpacaClient] response', {
-    path,
-    status: response.status,
-    ok: response.ok,
-    bodyPreview: text.slice(0, 500),
-  });
+    const responseText = await response.text();
+    console.log('[alpacaClient] response', {
+      path,
+      status: response.status,
+      ok: response.ok,
+      attempt,
+      bodyPreview: responseText.slice(0, 500),
+    });
 
-  if (!response.ok) {
-    throw new Error(`Alpaca request failed for ${path}: ${response.status} ${text}`);
-  }
+    if (response.status === 429) {
+      throw new RateLimitError(`Alpaca request rate limited for ${path}: ${response.status}`, {
+        path,
+        status: response.status,
+        bodyPreview: responseText.slice(0, 500),
+      });
+    }
+
+    if (!response.ok) {
+      throw new Error(`Alpaca request failed for ${path}: ${response.status} ${responseText}`);
+    }
+
+    return responseText;
+  });
 
   return JSON.parse(text) as T;
 }
@@ -180,8 +195,8 @@ function mapPositions(positions: AlpacaPosition[], totalValue: number): Position
     });
 }
 
-export async function getAlpacaPortfolioState(): Promise<PortfolioState | undefined> {
-  const config = await getConfig();
+export async function getAlpacaPortfolioState(agentId: TradingAgentId = 'neutral'): Promise<PortfolioState | undefined> {
+  const config = await getConfig(agentId);
 
   if (!hasAlpacaCredentials(config)) {
     console.log('[alpacaClient] credentials missing; Alpaca portfolio unavailable');
@@ -212,6 +227,7 @@ export async function getAlpacaPortfolioState(): Promise<PortfolioState | undefi
       buyingPower: portfolio.buyingPower,
       totalValue: portfolio.totalValue,
       positions: portfolio.positions,
+      agent: agentId,
     });
 
     return portfolio;
@@ -243,8 +259,11 @@ function mapBars(symbol: string, bars: AlpacaBar[]): MarketCandle[] {
   }));
 }
 
-export async function getAlpacaMarketSnapshot(symbols: string[]): Promise<MarketSnapshot | undefined> {
-  const config = await getConfig();
+export async function getAlpacaMarketSnapshot(
+  symbols: string[],
+  agentId: TradingAgentId = 'neutral',
+): Promise<MarketSnapshot | undefined> {
+  const config = await getConfig(agentId);
 
   const uniqueSymbols = [...new Set(symbols.map((symbol) => symbol.toUpperCase()))];
   lastAlpacaMarketDataFailure = undefined;
@@ -254,6 +273,7 @@ export async function getAlpacaMarketSnapshot(symbols: string[]): Promise<Market
     console.log('[alpacaClient] skipping Alpaca bars', {
       hasCredentials: hasAlpacaCredentials(config),
       symbols: uniqueSymbols,
+      agent: agentId,
     });
     return undefined;
   }
@@ -263,6 +283,7 @@ export async function getAlpacaMarketSnapshot(symbols: string[]): Promise<Market
     console.log('[alpacaClient] skipping Alpaca bars', {
       hasCredentials: hasAlpacaCredentials(config),
       symbols: uniqueSymbols,
+      agent: agentId,
     });
     return undefined;
   }
@@ -320,13 +341,14 @@ export async function getAlpacaMarketSnapshot(symbols: string[]): Promise<Market
   }
 }
 
-export async function submitAlpacaBuyOrder(plan: TradePlan): Promise<ExecutedTrade | undefined> {
-  const config = await getConfig();
+export async function submitAlpacaBuyOrder(plan: TradePlan, agentId: TradingAgentId = 'neutral'): Promise<ExecutedTrade | undefined> {
+  const config = await getConfig(agentId);
 
   if (!hasAlpacaCredentials(config)) {
     console.warn('[alpacaClient] cannot submit Alpaca order; credentials missing', {
       symbol: plan.symbol,
       planId: plan.id,
+      agent: agentId,
     });
     return undefined;
   }
@@ -368,6 +390,7 @@ export async function submitAlpacaBuyOrder(plan: TradePlan): Promise<ExecutedTra
     takeProfitPrice: plan.takeProfitPrice,
     stopLossPrice: plan.stopLossPrice,
     paper: config.ALPACA_PAPER,
+    agent: agentId,
   });
 
   try {

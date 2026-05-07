@@ -1,10 +1,12 @@
 import { Moon, Sun } from "lucide-react";
-import type { Theme } from "../../types/portfolio";
+import type { Theme, TradingAgentId, TradingAgentOption } from "../../types/portfolio";
 
 type AppHeaderProps = {
-  accountMode: string;
+  agents: readonly TradingAgentOption[];
+  selectedAgentId: TradingAgentId;
   activeTab: string;
   theme: Theme;
+  onSelectAgent: (agentId: TradingAgentId) => void;
   onSelectTab: (tab: string) => void;
   onToggleTheme: () => void;
 };
@@ -16,7 +18,15 @@ const tabs = [
   { id: "decisions", label: "Decisions" },
 ];
 
-export function AppHeader({ accountMode, activeTab, theme, onSelectTab, onToggleTheme }: AppHeaderProps) {
+export function AppHeader({
+  agents,
+  selectedAgentId,
+  activeTab,
+  theme,
+  onSelectAgent,
+  onSelectTab,
+  onToggleTheme,
+}: AppHeaderProps) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -32,7 +42,21 @@ export function AppHeader({ accountMode, activeTab, theme, onSelectTab, onToggle
         ))}
       </nav>
       <div className="header-actions">
-        <span className="account-pill">{accountMode}</span>
+        <label className="account-select-wrap">
+          <span className="sr-only">Trading agent</span>
+          <select
+            className="account-select"
+            value={selectedAgentId}
+            aria-label="Trading agent"
+            onChange={(event) => onSelectAgent(event.target.value as TradingAgentId)}
+          >
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <button className="icon-button" type="button" onClick={onToggleTheme}>
           {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           <span className="sr-only">Toggle theme</span>

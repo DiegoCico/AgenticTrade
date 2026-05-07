@@ -27,7 +27,7 @@ The frontend needs one normalized history feed that can answer:
 - what market snapshot and signals the AI saw
 - whether the record is planned, executed, rejected, canceled, or failed
 
-Current API routes in `src/api/src/routers/aiTrading.ts` return in-memory data:
+Current API routes in `src/api/src/routers/aiTrading.ts` return live Alpaca portfolio data plus persisted or in-memory runtime records scoped to the selected agent:
 
 ```txt
 aiTrading.getState
@@ -35,6 +35,7 @@ aiTrading.getPortfolio
 aiTrading.getPositions
 aiTrading.getTradePlans
 aiTrading.getDecisions
+aiTrading.getAgents
 aiTrading.evaluate
 ```
 
@@ -48,6 +49,7 @@ Recommended input:
 
 ```ts
 {
+  agentId?: "conservative" | "neutral" | "aggressive";
   accountId?: string;
   symbol?: string;
   from?: string;
@@ -56,6 +58,8 @@ Recommended input:
   cursor?: string;
 }
 ```
+
+`accountId` remains the DynamoDB partitioning boundary. The frontend normally sends `agentId`; if `accountId` is omitted, the API resolves the selected agent's current Alpaca account id before querying history.
 
 ## Entity Types
 
@@ -407,6 +411,8 @@ When `runTradingPipeline()` runs:
 5. If risk validation creates a plan, write a `TRADE_PLAN` item.
 6. If an Alpaca paper order is accepted, write an `EXECUTED_TRADE` item with broker metadata.
 7. Write account-level `TRADE_HISTORY_ITEM` records for decisions, plans, and executed trades.
+
+The pipeline runs against one selected agent at a time. Because each agent uses a separate Alpaca account, persisted history remains isolated by broker `accountId`. In-memory fallback state is also partitioned by `agentId` so Conservative, Neutral, and Aggressive decisions/plans do not mix before DynamoDB is read.
 
 The current implementation writes in DynamoDB batch chunks of 25 items. Use conditional writes or transactions later only for records that must become strictly idempotent across Lambda retries.
 
