@@ -212,6 +212,7 @@ export async function getAlpacaPortfolioState(agentId: TradingAgentId = 'neutral
     const totalValue = numberFromString(account.portfolio_value, demoPortfolio.totalValue);
     const portfolio: PortfolioState = {
       accountId: account.id || demoPortfolio.accountId,
+      agentId,
       cash: numberFromString(account.cash, demoPortfolio.cash),
       buyingPower: numberFromString(account.buying_power, demoPortfolio.buyingPower),
       totalValue,
@@ -223,11 +224,11 @@ export async function getAlpacaPortfolioState(agentId: TradingAgentId = 'neutral
 
     console.log('[alpacaClient] mapped portfolio for AI input', {
       accountId: portfolio.accountId,
+      agent: agentId,
       cash: portfolio.cash,
       buyingPower: portfolio.buyingPower,
       totalValue: portfolio.totalValue,
       positions: portfolio.positions,
-      agent: agentId,
     });
 
     return portfolio;

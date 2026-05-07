@@ -24,6 +24,9 @@ export default function App() {
     let isRequestInFlight = false;
     let hasLoadedOnce = false;
 
+    setData(emptyPortfolioData);
+    setIsPollingExpired(false);
+
     async function loadData({ showLoading }: { showLoading: boolean }) {
       if (isRequestInFlight) return;
       isRequestInFlight = true;

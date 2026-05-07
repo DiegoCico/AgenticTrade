@@ -121,7 +121,7 @@ ALPACA_NEUTRAL_SECRET_ARN
 ALPACA_AGGRESSIVE_SECRET_ARN
 ```
 
-`ALPACA_SECRET_ARN` is still set as a Neutral compatibility alias. The API config loader reads the selected agent's secret from AWS Secrets Manager and falls back to environment variables if the secret cannot be loaded.
+`ALPACA_SECRET_ARN` is still set as a Neutral compatibility alias. In Lambda, the API config loader strictly reads the selected agent's secret from AWS Secrets Manager. If that agent's secret ARN, `ALPACA_API_KEY`, or `ALPACA_SECRET_KEY` is missing, that agent fails instead of falling back to another account. Local development can still use environment variables.
 
 Each CDK-created secret stores:
 

@@ -56,22 +56,6 @@ export class WebStack extends cdk.Stack {
       originAccessIdentity: oai,
     });
 
-    // ======== cache policy ========
-    const apiCachePolicy = new cloudfront.CachePolicy(this, "ApiCachePolicy", {
-      cachePolicyName: `${serviceName}-${stageName}-api-cache`,
-
-      // MUST be > 0
-      defaultTtl: cdk.Duration.seconds(1),
-      minTtl: cdk.Duration.seconds(0),
-      maxTtl: cdk.Duration.seconds(1),
-
-      headerBehavior: cloudfront.CacheHeaderBehavior.allowList(
-        "Authorization"
-      ),
-      cookieBehavior: cloudfront.CacheCookieBehavior.all(),
-      queryStringBehavior: cloudfront.CacheQueryStringBehavior.all(),
-    });
-
     // ===== API Origin =====
     const apiDomainName = props.apiDomainName;
     const apiPaths =
@@ -110,7 +94,7 @@ export class WebStack extends cdk.Stack {
           origin: apiOrigin,
           allowedMethods:
             cloudfront.AllowedMethods.ALLOW_ALL,
-          cachePolicy:apiCachePolicy,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: apiRequestPolicy,
           viewerProtocolPolicy:
             cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,

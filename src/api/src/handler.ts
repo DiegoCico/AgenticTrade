@@ -59,6 +59,8 @@ export const handler = async (
     }
   }
 
+  console.log('[handler] raw query', event.queryStringParameters);
+
   return awsLambdaRequestHandler({
     router: appRouter,
     createContext: createLambdaContext,

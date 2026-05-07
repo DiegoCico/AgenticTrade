@@ -75,6 +75,8 @@ ALPACA_AGGRESSIVE_SECRET_ARN
 
 `ALPACA_SECRET_ARN` is kept as a neutral-account compatibility alias. Both Lambdas are granted read access to all three Alpaca secrets.
 
+The API treats Alpaca secrets as strict in Lambda. If a selected agent's secret still has empty `ALPACA_API_KEY` or `ALPACA_SECRET_KEY` values, that agent will fail instead of reusing another account's credentials. Update all three Secrets Manager values after deploy.
+
 ## LLM Secret
 
 `LlmSecretsStack` creates:

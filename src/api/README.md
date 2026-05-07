@@ -178,7 +178,7 @@ LLM_SECRET_ARN=...
 DEMO_MODE=false
 ```
 
-`process.ts` loads the selected agent's Alpaca credentials and the LLM credentials from AWS Secrets Manager when running in Lambda. Local development falls back to the single `.env` Alpaca credential pair for all agents.
+`process.ts` loads the selected agent's Alpaca credentials and the LLM credentials from AWS Secrets Manager when running in Lambda. Alpaca secret loading is strict in Lambda: if a selected agent's secret ARN, `ALPACA_API_KEY`, or `ALPACA_SECRET_KEY` is missing, that agent fails instead of falling back to another account's credentials. Local development falls back to the single `.env` Alpaca credential pair for all agents.
 
 ## Commands
 

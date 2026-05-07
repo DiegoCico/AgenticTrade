@@ -21,6 +21,7 @@ export type Position = {
 
 export type PortfolioState = {
   accountId: string;
+  agentId?: string;
   cash: number;
   buyingPower: number;
   totalValue: number;

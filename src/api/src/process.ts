@@ -18,13 +18,21 @@ const envSchema = z.object({
   S3_BUCKET_NAME: z.string().optional(),
   S3_KMS_KEY_ARN: z.string().optional(),
 
-  // Alpaca Trading
+  // Alpaca Trading (shared fallback)
   ALPACA_API_KEY: z.string().optional(),
   ALPACA_SECRET_KEY: z.string().optional(),
   ALPACA_BASE_URL: z.string().default('https://paper-api.alpaca.markets/v2'),
   ALPACA_DATA_URL: z.string().default('https://data.alpaca.markets'),
   ALPACA_DATA_FEED: z.string().default('iex'),
   ALPACA_PAPER: z.string().default('true'),
+
+  // Per-agent Alpaca credentials (local/non-Lambda override)
+  ALPACA_CONSERVATIVE_API_KEY: z.string().optional(),
+  ALPACA_CONSERVATIVE_SECRET_KEY: z.string().optional(),
+  ALPACA_NEUTRAL_API_KEY: z.string().optional(),
+  ALPACA_NEUTRAL_SECRET_KEY: z.string().optional(),
+  ALPACA_AGGRESSIVE_API_KEY: z.string().optional(),
+  ALPACA_AGGRESSIVE_SECRET_KEY: z.string().optional(),
 
   // LLM Market Context
   LLM_PROVIDER: z.string().default('openai-compatible'),
@@ -103,9 +111,18 @@ async function loadAlpacaSecretsFromAWS(secretArn: string): Promise<AlpacaSecret
 }
 
 function getAlpacaSecretArnForAgent(env: z.infer<typeof envSchema>, agentId: TradingAgentId) {
-  if (agentId === 'conservative') return env.ALPACA_CONSERVATIVE_SECRET_ARN ?? env.ALPACA_SECRET_ARN;
-  if (agentId === 'aggressive') return env.ALPACA_AGGRESSIVE_SECRET_ARN ?? env.ALPACA_SECRET_ARN;
+  if (agentId === 'conservative') return env.ALPACA_CONSERVATIVE_SECRET_ARN;
+  if (agentId === 'aggressive') return env.ALPACA_AGGRESSIVE_SECRET_ARN;
   return env.ALPACA_NEUTRAL_SECRET_ARN ?? env.ALPACA_SECRET_ARN;
+}
+
+function requireAlpacaSecretValue(secrets: AlpacaSecrets, key: keyof Pick<AlpacaSecrets, 'ALPACA_API_KEY' | 'ALPACA_SECRET_KEY'>) {
+  const value = secrets[key]?.trim();
+  if (!value) {
+    throw new Error(`Alpaca secret is missing required field ${key}`);
+  }
+
+  return value;
 }
 
 async function loadLlmSecretsFromAWS(secretArn: string): Promise<{
@@ -158,8 +175,18 @@ export async function loadConfig(agentId: TradingAgentId = 'neutral') {
   const WEB_URL = env.WEB_URL ?? 'https://d2cktegyq4qcfk.cloudfront.net';
   const LOCAL_WEB_ORIGIN = env.LOCAL_WEB_ORIGIN ?? 'http://localhost:5173';
 
-  let ALPACA_API_KEY = env.ALPACA_API_KEY ?? '';
-  let ALPACA_SECRET_KEY = env.ALPACA_SECRET_KEY ?? '';
+  // Resolve per-agent env var credentials (local override before AWS secrets)
+  const agentApiKey =
+    agentId === 'conservative' ? env.ALPACA_CONSERVATIVE_API_KEY
+    : agentId === 'aggressive' ? env.ALPACA_AGGRESSIVE_API_KEY
+    : env.ALPACA_NEUTRAL_API_KEY;
+  const agentSecretKey =
+    agentId === 'conservative' ? env.ALPACA_CONSERVATIVE_SECRET_KEY
+    : agentId === 'aggressive' ? env.ALPACA_AGGRESSIVE_SECRET_KEY
+    : env.ALPACA_NEUTRAL_SECRET_KEY;
+
+  let ALPACA_API_KEY = agentApiKey ?? env.ALPACA_API_KEY ?? '';
+  let ALPACA_SECRET_KEY = agentSecretKey ?? env.ALPACA_SECRET_KEY ?? '';
   let ALPACA_BASE_URL = env.ALPACA_BASE_URL;
   let ALPACA_DATA_URL = env.ALPACA_DATA_URL;
   let ALPACA_DATA_FEED = env.ALPACA_DATA_FEED;
@@ -167,17 +194,24 @@ export async function loadConfig(agentId: TradingAgentId = 'neutral') {
 
   const ALPACA_SECRET_ARN = getAlpacaSecretArnForAgent(env, agentId);
 
-  if (ALPACA_SECRET_ARN && process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  const isLambda = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+
+  if (isLambda && !ALPACA_SECRET_ARN) {
+    throw new Error(`Missing Alpaca secret ARN for ${agentId} agent`);
+  }
+
+  if (ALPACA_SECRET_ARN && isLambda) {
     try {
       const secrets = await loadAlpacaSecretsFromAWS(ALPACA_SECRET_ARN);
-      ALPACA_API_KEY = secrets.ALPACA_API_KEY || ALPACA_API_KEY;
-      ALPACA_SECRET_KEY = secrets.ALPACA_SECRET_KEY || ALPACA_SECRET_KEY;
+      ALPACA_API_KEY = requireAlpacaSecretValue(secrets, 'ALPACA_API_KEY');
+      ALPACA_SECRET_KEY = requireAlpacaSecretValue(secrets, 'ALPACA_SECRET_KEY');
       ALPACA_BASE_URL = secrets.ALPACA_BASE_URL || ALPACA_BASE_URL;
       ALPACA_DATA_URL = secrets.ALPACA_DATA_URL || ALPACA_DATA_URL;
       ALPACA_DATA_FEED = secrets.ALPACA_DATA_FEED || ALPACA_DATA_FEED;
       ALPACA_PAPER = secrets.ALPACA_PAPER || ALPACA_PAPER;
     } catch (error) {
-      console.warn(`[process.ts] ⚠️  Failed to load ${agentId} Alpaca secrets from AWS, using environment variables`);
+      console.error(`[process.ts] ❌ Failed to load valid ${agentId} Alpaca secrets from AWS`, error);
+      throw error;
     }
   }
 

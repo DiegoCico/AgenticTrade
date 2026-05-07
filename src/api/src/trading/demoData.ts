@@ -132,6 +132,7 @@ export function getDemoPortfolioForAgent(agentId: TradingAgentId): PortfolioStat
   return {
     ...demoPortfolio,
     accountId: `paper-agentictrade-${agentId}`,
+    agentId,
     positions: demoPortfolio.positions.map((position) => ({ ...position })),
   };
 }

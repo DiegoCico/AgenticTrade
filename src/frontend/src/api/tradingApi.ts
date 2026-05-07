@@ -41,6 +41,7 @@ type BackendPosition = {
 
 type BackendPortfolioState = {
   accountId: string;
+  agentId?: TradingAgentId;
   cash: number;
   buyingPower: number;
   totalValue: number;
@@ -150,7 +151,7 @@ async function trpcQuery<T>(procedure: string, input?: unknown): Promise<T> {
   const url = new URL(`/trpc/${procedure}`, baseUrl);
 
   if (input !== undefined) {
-    url.searchParams.set("input", JSON.stringify({ json: input }));
+    url.searchParams.set("input", JSON.stringify(input));
   }
 
   console.log("[frontend:trpcQuery] request", {
@@ -316,6 +317,10 @@ export function mapPortfolioData(state: BackendTradingState, agentId: TradingAge
     backendDecisions: state.decisions.length,
     backendPlans: state.tradePlans.length,
     backendExecutedTrades: state.executedTrades.length,
+    selectedAgentId: agentId,
+    backendAgentId: state.portfolio.agentId,
+    accountId: state.portfolio.accountId,
+    symbols: state.portfolio.positions.map((position) => position.symbol),
     mapped,
   });
 
@@ -362,6 +367,9 @@ export async function loadTradingDashboard(agentId: TradingAgentId = defaultTrad
   });
 
   console.log("[frontend:loadTradingDashboard] raw backend payloads", {
+    selectedAgentId: agentId,
+    accountId: state.portfolio.accountId,
+    backendAgentId: state.portfolio.agentId,
     state,
     tradeHistory,
   });
@@ -384,6 +392,8 @@ export async function loadTradingDashboard(agentId: TradingAgentId = defaultTrad
   }));
 
   console.log("[frontend:loadTradingDashboard] final frontend data", {
+    selectedAgentId: agentId,
+    accountId: data.account.name,
     positions: data.positions.length,
     plans: data.plans.length,
     trades: data.trades.length,

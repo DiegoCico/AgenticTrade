@@ -26,6 +26,14 @@ export function AIStatusPanel({ data }: AIStatusPanelProps) {
       </div>
       <div className="metric-list">
         <div>
+          <span>Account</span>
+          <strong>{data.account.name}</strong>
+        </div>
+        <div>
+          <span>Agent</span>
+          <strong>{data.account.mode}</strong>
+        </div>
+        <div>
           <span>Total return</span>
           <strong className="positive-text">
             {money.format(data.portfolio.totalReturn)} ({formatPercent(data.portfolio.totalReturnPercent)})
