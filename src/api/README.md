@@ -68,6 +68,16 @@ Most read procedures accept an optional `agentId` of `conservative`, `neutral`, 
 
 If `symbols` is omitted, the API evaluates the AI-managed strategy universe plus current holdings for the selected agent. Neutral keeps the previous balanced targets; Conservative biases toward ETF/dividend/high-dividend candidates; Aggressive biases toward short-term aggressive-stock purchases.
 
+Each agent has its own per-agent signal thresholds (`minBuyMomentum`, `minBuyVolumeRatio`) that gate the `strongBuySignal` check in the decision engine:
+
+| Agent | minBuyMomentum | minBuyVolumeRatio | maxBuyVolatility | buyConfidenceOffset | takeProfitPercent | stopLossPercent | maxTradeValueMultiplier |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Conservative | 1.0% | 0.20 | 5% | +4 | 5% | 3% | 0.65× |
+| Neutral | 1.0% | 0.20 | 7.5% | 0 | 8% | 4% | 1.0× |
+| Aggressive | 0.3% | 0.05 | 15% | −10 | 4% | 2.5% | 1.5× |
+
+The Aggressive agent's lower thresholds allow it to enter on weaker signals for short-term bracket trades. The tighter take-profit (4%) and stop-loss (2.5%) targets are intentional — they produce faster exits suited to 1-7 day holding periods.
+
 ## Trading Pipeline
 
 The pipeline is intentionally structured instead of prompting the AI with raw stocks.

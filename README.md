@@ -40,9 +40,9 @@ Market snapshot
 
 Agent profiles:
 
-- `Conservative Agent`: prioritizes ETFs, dividend ETFs, and defensive high-dividend stocks with smaller trades and tighter volatility limits.
-- `Neutral Agent`: preserves the previous balanced sleeve targets.
-- `Aggressive Agent`: allocates more capacity to aggressive-stock candidates and uses shorter-term bracket levels for 1-7 day style trades.
+- `Conservative Agent`: prioritizes ETFs, dividend ETFs, and defensive high-dividend stocks with smaller trades and tighter volatility limits. Requires strong momentum (≥1%) and volume ratio (≥0.2) to trigger a buy.
+- `Neutral Agent`: preserves the previous balanced sleeve targets. Same momentum and volume thresholds as conservative.
+- `Aggressive Agent`: targets short-term 1-7 day trades with much lower entry barriers. Per-agent signal thresholds — momentum ≥0.3%, volume ratio ≥0.05, volatility up to 15% — let the agent act on weaker signals that the other agents ignore. Confidence offset is −10 (effective buy threshold ~60). Position sizing is 1.5× the base trade value. Take-profit is 4% and stop-loss is 2.5% for fast bracket exits.
 
 Infrastructure:
 

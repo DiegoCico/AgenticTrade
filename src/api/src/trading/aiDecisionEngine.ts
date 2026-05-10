@@ -60,8 +60,8 @@ export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDeci
     const preLlmTrimConfidence = Math.round(66 + signal.volatilityPercent * 2);
     const trimConfidence = Math.min(88, preLlmTrimConfidence - llmInfluence.confidenceAdjustment);
     const strongBuySignal =
-      signal.momentumPercent >= STRONG_BUY_MOMENTUM &&
-      signal.volumeRatio >= STRONG_BUY_VOLUME_RATIO &&
+      signal.momentumPercent >= agentProfile.minBuyMomentum &&
+      signal.volumeRatio >= agentProfile.minBuyVolumeRatio &&
       signal.volatilityPercent <= agentProfile.maxBuyVolatility;
     const strongTrimSignal = signal.momentumPercent <= STRONG_SELL_MOMENTUM || signal.volatilityPercent >= STRONG_RISK_VOLATILITY;
     const baseCheckpoints = [
@@ -99,6 +99,8 @@ export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDeci
           `minBuyConfidence=${minBuyConfidence}`,
           `selectedByStrategy=true`,
         ],
+        minBuyMomentum: agentProfile.minBuyMomentum,
+        minBuyVolumeRatio: agentProfile.minBuyVolumeRatio,
       });
 
       return {
@@ -169,6 +171,8 @@ export async function requestAiDecisions(input: AiDecisionInput): Promise<AiDeci
       noTradeBiasApplied: true,
       executionPlan: 'No trade. Keep monitoring until signal strength and confidence clear the trade gate.',
       checkpoints: [...baseCheckpoints, `agent=${agentProfile.id}`, ...noTradeReasons],
+      minBuyMomentum: agentProfile.minBuyMomentum,
+      minBuyVolumeRatio: agentProfile.minBuyVolumeRatio,
     });
 
     return {
@@ -201,8 +205,8 @@ function getLlmInfluence(symbolContext: MarketContext['perSymbol'][number] | und
   };
 }
 
-function signalStrength(signal: TradingSignal): DecisionJournal['signalStrength'] {
-  if (signal.signal === 'bullish' && signal.momentumPercent >= STRONG_BUY_MOMENTUM && signal.volumeRatio >= STRONG_BUY_VOLUME_RATIO) {
+function signalStrength(signal: TradingSignal, minBuyMomentum = STRONG_BUY_MOMENTUM, minBuyVolumeRatio = STRONG_BUY_VOLUME_RATIO): DecisionJournal['signalStrength'] {
+  if (signal.signal === 'bullish' && signal.momentumPercent >= minBuyMomentum && signal.volumeRatio >= minBuyVolumeRatio) {
     return 'strong';
   }
   if (signal.signal === 'bearish' && (signal.momentumPercent <= STRONG_SELL_MOMENTUM || signal.volatilityPercent >= STRONG_RISK_VOLATILITY)) {
@@ -221,13 +225,15 @@ function createJournal(input: {
   noTradeBiasApplied: boolean;
   executionPlan: string;
   checkpoints: string[];
+  minBuyMomentum?: number;
+  minBuyVolumeRatio?: number;
 }): DecisionJournal {
   return {
     strategyBucket: input.bucket,
     signal: input.signal.signal,
     preLlmConfidence: input.preLlmConfidence,
     finalConfidence: input.finalConfidence,
-    signalStrength: signalStrength(input.signal),
+    signalStrength: signalStrength(input.signal, input.minBuyMomentum, input.minBuyVolumeRatio),
     noTradeBias: input.noTradeBiasApplied
       ? 'Applied. The system defaults to hold unless signal strength, confidence, allocation, and risk checks all pass.'
       : 'Cleared. Signal strength, confidence, allocation, and risk checks allowed an execution plan.',

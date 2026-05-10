@@ -38,6 +38,8 @@ export type TradingAgentProfile = {
   targets: StrategyTargets;
   buyConfidenceOffset: number;
   maxBuyVolatility: number;
+  minBuyMomentum: number;
+  minBuyVolumeRatio: number;
   stopLossPercent: number;
   takeProfitPercent: number;
   entryPullbackPercent: number;
@@ -61,6 +63,8 @@ export const TRADING_AGENT_PROFILES: Record<TradingAgentId, TradingAgentProfile>
     },
     buyConfidenceOffset: 4,
     maxBuyVolatility: 5,
+    minBuyMomentum: 1.0,
+    minBuyVolumeRatio: 0.2,
     stopLossPercent: 0.03,
     takeProfitPercent: 0.05,
     entryPullbackPercent: 0.01,
@@ -73,6 +77,8 @@ export const TRADING_AGENT_PROFILES: Record<TradingAgentId, TradingAgentProfile>
     targets: STRATEGY_TARGETS,
     buyConfidenceOffset: 0,
     maxBuyVolatility: 7.5,
+    minBuyMomentum: 1.0,
+    minBuyVolumeRatio: 0.2,
     stopLossPercent: 0.04,
     takeProfitPercent: 0.08,
     entryPullbackPercent: 0.015,
@@ -92,12 +98,14 @@ export const TRADING_AGENT_PROFILES: Record<TradingAgentId, TradingAgentProfile>
       maxSafeStockPicks: 2,
       maxAggressiveStockPicks: 5,
     },
-    buyConfidenceOffset: -5,
-    maxBuyVolatility: 11,
-    stopLossPercent: 0.035,
-    takeProfitPercent: 0.055,
-    entryPullbackPercent: 0.005,
-    maxTradeValueMultiplier: 1.2,
+    buyConfidenceOffset: -10,
+    maxBuyVolatility: 15,
+    minBuyMomentum: 0.3,
+    minBuyVolumeRatio: 0.05,
+    stopLossPercent: 0.025,
+    takeProfitPercent: 0.04,
+    entryPullbackPercent: 0.002,
+    maxTradeValueMultiplier: 1.5,
   },
 };
 
